@@ -1,0 +1,235 @@
+{
+  "role": "Auxiliar de Laboratório",
+
+  "menu": [
+    {
+      "id": "dashboard",
+      "label": "Dashboard",
+      "icon": "home",
+      "page": "dashboard",
+      "type": "link"
+    },
+    {
+      "id": "estoque",
+      "label": "Estoque",
+      "icon": "inventory_2",
+      "type": "group",
+      "defaultOpen": true,
+      "children": [
+        {
+          "id": "produtos",
+          "label": "Produtos",
+          "icon": "science",
+          "page": "produtos"
+        },
+        {
+          "id": "categorias-produtos",
+          "label": "Categoria de Produtos",
+          "icon": "category",
+          "page": "categorias-produtos"
+        }
+      ]
+    },
+    {
+      "id": "solicitacoes",
+      "label": "Solicitações",
+      "icon": "shopping_cart",
+      "type": "group",
+      "defaultOpen": true,
+      "children": [
+        {
+          "id": "compras",
+          "label": "Compras",
+          "icon": "shopping_bag",
+          "page": "compras"
+        }
+      ]
+    },
+    {
+      "id": "recebimento",
+      "label": "Recebimento",
+      "icon": "local_shipping",
+      "type": "group",
+      "defaultOpen": false,
+      "children": [
+        {
+          "id": "entradas",
+          "label": "Entradas",
+          "icon": "assignment",
+          "page": "entradas"
+        }
+      ]
+    },
+    {
+      "id": "agendamentos",
+      "label": "Agendamentos",
+      "icon": "calendar_month",
+      "type": "group",
+      "defaultOpen": false,
+      "children": [
+        {
+          "id": "reservas",
+          "label": "Reservas",
+          "icon": "event_available",
+          "page": "reservas"
+        },
+        {
+          "id": "preparar-pratica",
+          "label": "Preparar Prática",
+          "icon": "assignment",
+          "page": "preparar-pratica"
+        }
+      ]
+    }
+  ],
+
+  "dashboard": {
+    "badge": "Gestão de Laboratório",
+    "badgeIcon": "inventory_2",
+    "greeting": "Bem-vindo ao painel, Auxiliar!",
+    "description": "Acompanhe o estoque, gerencie solicitações de compras e registre o recebimento de materiais.",
+    "primaryAction": {
+      "label": "Ver Produtos",
+      "icon": "science",
+      "page": "produtos"
+    },
+    "secondaryAction": {
+      "label": "Solicitações",
+      "icon": "arrow_forward",
+      "page": "compras"
+    },
+    "heroImage": "../Assets/Imagens/Auxiliar.png",
+    "quickAccess": [
+      {
+        "title": "Produtos",
+        "description": "Consulte e edite o catálogo de materiais",
+        "icon": "science",
+        "color": "green",
+        "page": "produtos"
+      },
+      {
+        "title": "Compras",
+        "description": "Registre novas solicitações de compra",
+        "icon": "shopping_bag",
+        "color": "blue",
+        "page": "compras"
+      },
+      {
+        "title": "Entradas",
+        "description": "Confirme o recebimento de materiais",
+        "icon": "local_shipping",
+        "color": "purple",
+        "page": "entradas"
+      }
+    ],
+    "table": {
+      "title": "Últimas Movimentações de Estoque",
+      "icon": "swap_horiz",
+      "showLink": false,
+      "search": true,
+      "searchPlaceholder": "Buscar produto...",
+      "columns": ["Produto", "Categoria", "Qtd", "Tipo", "Status"],
+      "rows": [
+        [
+          { "type": "iconText", "icon": "science", "text": "Ácido Clorídrico", "color": "green" },
+          "Reagentes",
+          "5 frascos",
+          { "type": "iconText", "icon": "add_circle", "text": "Entrada", "color": "green" },
+          { "type": "status", "label": "Confirmado", "color": "green" }
+        ],
+        [
+          { "type": "iconText", "icon": "science", "text": "Luvas Nitrílicas", "color": "blue" },
+          "EPI",
+          "2 caixas",
+          { "type": "iconText", "icon": "remove_circle", "text": "Saída", "color": "orange" },
+          { "type": "status", "label": "Pendente", "color": "orange" }
+        ],
+        [
+          { "type": "iconText", "icon": "science", "text": "Béquer 250ml", "color": "purple" },
+          "Vidraria",
+          "10 unid.",
+          { "type": "iconText", "icon": "add_circle", "text": "Entrada", "color": "green" },
+          { "type": "status", "label": "Confirmado", "color": "green" }
+        ],
+        [
+          { "type": "iconText", "icon": "science", "text": "Hidróxido de Sódio", "color": "green" },
+          "Reagentes",
+          "3 frascos",
+          { "type": "iconText", "icon": "shopping_bag", "text": "Compra", "color": "blue" },
+          { "type": "status", "label": "Em trânsito", "color": "blue" }
+        ]
+      ],
+      "footerLink": "Ver todas as movimentações"
+    },
+    "summary": {
+      "title": "Resumo de hoje",
+      "icon": "today",
+      "items": [
+        {
+          "title": "Bancadas pendentes",
+          "subtitle": "Aguardando preparo",
+          "icon": "table_bar",
+          "color": "green",
+          "value": "3"
+        },
+        {
+          "title": "Solicitações abertas",
+          "subtitle": "Para preparar",
+          "icon": "assignment",
+          "color": "blue",
+          "value": "6"
+        },
+        {
+          "title": "Atividades a vencer",
+          "subtitle": "Nos próximos 7 dias",
+          "icon": "event_busy",
+          "color": "orange",
+          "value": "5"
+        },
+        {
+          "title": "Reservas do dia",
+          "subtitle": "Hoje",
+          "icon": "event_available",
+          "color": "purple",
+          "value": "2"
+        }
+      ],
+      "action": {
+        "label": "Ver agenda completa",
+        "icon": "arrow_forward",
+        "page": "reservas"
+      }
+    },
+    "activities": {
+      "title": "Atividades Recentes",
+      "icon": "history",
+      "items": [
+        {
+          "title": "Entrada de reagentes registrada",
+          "time": "Hoje, 09:14",
+          "icon": "add_circle",
+          "color": "green"
+        },
+        {
+          "title": "Solicitação de compra enviada",
+          "time": "Hoje, 08:30",
+          "icon": "shopping_bag",
+          "color": "blue"
+        },
+        {
+          "title": "Estoque de EPI atualizado",
+          "time": "Ontem, 16:45",
+          "icon": "inventory_2",
+          "color": "purple"
+        },
+        {
+          "title": "Produto próximo ao vencimento",
+          "time": "Ontem, 11:00",
+          "icon": "warning",
+          "color": "orange"
+        }
+      ],
+      "footerLink": "Ver histórico completo"
+    }
+  }
+}

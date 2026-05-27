@@ -1,0 +1,173 @@
+{
+  "role": "Professor",
+
+  "menu": [
+    {
+      "id": "dashboard",
+      "label": "Dashboard",
+      "icon": "home",
+      "page": "dashboard",
+      "type": "link"
+    },
+    {
+      "id": "inventario",
+      "label": "Inventário",
+      "icon": "inventory_2",
+      "type": "group",
+      "defaultOpen": true,
+      "children": [
+        {
+          "id": "produtos",
+          "label": "Produtos",
+          "icon": "science",
+          "page": "produtos"
+        }
+      ]
+    },
+    {
+      "id": "agendamentos",
+      "label": "Agendamentos",
+      "icon": "calendar_month",
+      "type": "group",
+      "defaultOpen": true,
+      "children": [
+        {
+          "id": "criar-roteiro",
+          "label": "Criar Roteiro",
+          "icon": "assignment_add",
+          "page": "criar-roteiro"
+        },
+        {
+          "id": "meus-agendamentos",
+          "label": "Meus Agendamentos",
+          "icon": "assignment",
+          "page": "meus-agendamentos"
+        }
+      ]
+    }
+  ],
+
+  "dashboard": {
+    "badge": "Gestão Acadêmica",
+    "badgeIcon": "school",
+    "greeting": "Bem-vindo ao painel, Professor!",
+    "description": "Crie roteiros de prática, solicite materiais ao laboratório e acompanhe seus agendamentos.",
+    "primaryAction": {
+      "label": "Criar Roteiro",
+      "icon": "assignment_add",
+      "page": "criar-roteiro"
+    },
+    "secondaryAction": {
+      "label": "Meus Agendamentos",
+      "icon": "arrow_forward",
+      "page": "meus-agendamentos"
+    },
+    "heroImage": "../Assets/Imagens/Professor.png",
+    "quickAccess": [
+      {
+        "title": "Criar Roteiro",
+        "description": "Monte um novo roteiro de prática",
+        "icon": "assignment_add",
+        "color": "green",
+        "page": "criar-roteiro"
+      },
+      {
+        "title": "Meus Agendamentos",
+        "description": "Acompanhe seus pedidos de materiais",
+        "icon": "assignment",
+        "color": "blue",
+        "page": "meus-agendamentos"
+      },
+      {
+        "title": "Produtos",
+        "description": "Consulte o inventário do laboratório",
+        "icon": "science",
+        "color": "purple",
+        "page": "produtos"
+      }
+    ],
+    "table": {
+      "title": "Meus Roteiros",
+      "icon": "assignment",
+      "showLink": false,
+      "search": true,
+      "searchPlaceholder": "Buscar roteiro...",
+      "columns": ["Roteiro", "Categoria", "Materiais", "Último uso"],
+      "rows": [
+        [
+          { "type": "iconText", "icon": "assignment", "text": "Titulação Ácido-Base", "color": "green" },
+          "Química",
+          "12 itens",
+          "Há 2 dias"
+        ],
+        [
+          { "type": "iconText", "icon": "assignment", "text": "Destilação Simples", "color": "blue" },
+          "Química",
+          "7 itens",
+          "Ontem"
+        ],
+        [
+          { "type": "iconText", "icon": "assignment", "text": "Eletroforese", "color": "purple" },
+          "Biologia",
+          "15 itens",
+          "Há 1 semana"
+        ]
+      ],
+      "footerLink": "Ver todos os roteiros"
+    },
+    "agendamentosHoje": {
+      "title": "Agendamentos para hoje",
+      "icon": "calendar_month",
+      "items": [
+        {
+          "inicio": "08:00",
+          "fim": "10:00",
+          "titulo": "Titulação Ácido-Base",
+          "turma": "3º Ano A",
+          "alunos": 30,
+          "status": "confirmado"
+        },
+        {
+          "inicio": "14:00",
+          "fim": "16:00",
+          "titulo": "Destilação Simples",
+          "turma": "3º Ano B",
+          "alunos": 28,
+          "status": "em-preparacao"
+        },
+        {
+          "inicio": "16:00",
+          "fim": "18:00",
+          "titulo": "Reação de Oxidação",
+          "turma": "2º Ano B",
+          "alunos": 25,
+          "status": "confirmado"
+        }
+      ]
+    },
+    "praticasPreparadas": {
+      "title": "Práticas preparadas",
+      "icon": "science",
+      "items": [
+        {
+          "titulo": "Bancada 2 preparada",
+          "descricao": "Titulação Ácido-Base • 07/06 às 08h",
+          "status": "preparada",
+          "tempo": "Há 25 min"
+        },
+        {
+          "titulo": "Bancada 1 preparada",
+          "descricao": "Destilação Simples • 08/06 às 14h",
+          "status": "preparada",
+          "tempo": "Há 1 hora"
+        },
+        {
+          "titulo": "Bancada 3 pendente",
+          "descricao": "Reação de Oxidação • 10/06 às 10h",
+          "status": "pendente",
+          "tempo": "Há 2 horas"
+        }
+      ]
+    }
+  }
+}

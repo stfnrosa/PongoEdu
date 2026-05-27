@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "name": "Professor",
+    "email": "professor@pongoedu.com.br",
+    "password": "123",
+    "profile": "professor",
+    "avatar": "👨‍🏫"
+  },
+  {
+    "id": 2,
+    "name": "Auxiliar",
+    "email": "auxiliar@pongoedu.com.br",
+    "password": "123",
+    "profile": "auxiliar",
+    "avatar": "👩‍🔬"
+  }
+]

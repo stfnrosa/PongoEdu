@@ -1,0 +1,52 @@
+[
+  {
+    "id": "1",
+    "titulo": "Lab Química",
+    "roteiro": "Titulação Ácido-Base",
+    "turma": "3º Ano A",
+    "data": "2026-05-25",
+    "horaInicio": "08:00",
+    "horaFim": "10:00",
+    "status": "preparado"
+  },
+  {
+    "id": "2",
+    "titulo": "Lab Biologia",
+    "roteiro": "Destilação Simples",
+    "turma": "2º Ano B",
+    "data": "2026-05-26",
+    "horaInicio": "10:30",
+    "horaFim": "12:30",
+    "status": "preparado"
+  },
+  {
+    "id": "3",
+    "titulo": "Lab Química",
+    "roteiro": "Titulação Ácido-Base",
+    "turma": "3º Ano A",
+    "data": "2026-05-27",
+    "horaInicio": "14:00",
+    "horaFim": "16:00",
+    "status": "preparado"
+  },
+  {
+    "id": "4",
+    "titulo": "Lab Física",
+    "roteiro": "Reação de Oxidação",
+    "turma": "1º Ano C",
+    "data": "2026-05-28",
+    "horaInicio": "16:30",
+    "horaFim": "18:30",
+    "status": "pendente"
+  },
+  {
+    "id": "5",
+    "titulo": "Lab Química",
+    "roteiro": "Síntese Orgânica I",
+    "turma": "3º Ano A",
+    "data": "2026-05-29",
+    "horaInicio": "19:00",
+    "horaFim": "21:00",
+    "status": "pendente"
+  }
+]

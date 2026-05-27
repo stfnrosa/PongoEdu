@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login - PongoEdu</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400..700,0..1,-50..200" rel="stylesheet" />
+
+  <link rel="stylesheet" href="../Styles/entrar.css">
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="container d-flex justify-content-between align-items-center">
+      <a href="index.html" class="logo-area text-decoration-none">
+        <img src="../Assets/Imagens/Pongo.svg" alt="PongoEdu" class="logo-image">
+
+        <div>
+          <h1 class="logo-title">
+            <span class="green">Pongo</span><span class="purple">Edu</span>
+          </h1>
+          <p class="logo-subtitle">Gestão educacional e laboratorial</p>
+        </div>
+      </a>
+
+      <div class="d-flex align-items-center gap-3">
+        <a href="../../index.html" class="home-link">
+          <span class="material-symbols-rounded">home</span>
+          Página inicial
+        </a>
+
+        <a href="criar-conta.html" class="create-account-btn">
+          <span class="material-symbols-rounded">person_add</span>
+          Criar conta
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="login-page">
+    <div class="bg-circle left-top"></div>
+    <div class="bg-circle right-top"></div>
+    <div class="bg-circle right-bottom"></div>
+
+    <div class="dot green-dot"></div>
+    <div class="dot blue-dot"></div>
+    <div class="dot purple-dot"></div>
+    <div class="dot green-dot-2"></div>
+    <div class="dot blue-dot-2"></div>
+    <div class="dot purple-dot-2"></div>
+
+    <div class="login-card">
+      <img src="../Assets/Imagens/Pongo.svg" alt="Mascote" class="mascot">
+
+      <h2 class="brand">
+        <span class="green">Pongo</span><span class="purple">Edu</span>
+      </h2>
+
+      <h3 class="title">Entrar na sua conta</h3>
+
+      <p class="subtitle">
+        Digite seu e-mail e senha para acessar sua conta.
+      </p>
+
+      <form id="loginForm">
+        <div id="loginError" class="alert alert-danger d-none" role="alert">
+          E-mail ou senha inválidos.
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label">E-mail</label>
+
+          <div class="input-wrapper">
+            <span class="material-symbols-rounded input-icon">mail</span>
+
+            <input
+              type="email"
+              class="custom-input"
+              placeholder="seu@email.com"
+              id="email"
+              required
+            >
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Senha</label>
+
+          <div class="input-wrapper">
+            <span class="material-symbols-rounded input-icon">lock</span>
+
+            <input
+              type="password"
+              class="custom-input"
+              placeholder="••••••••"
+              id="password"
+              required
+            >
+
+            <button type="button" class="toggle-password" id="togglePassword">
+              <span class="material-symbols-rounded">visibility</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="forgot-wrapper">
+          <a href="#" class="forgot-password">Esqueci minha senha</a>
+        </div>
+
+        <button type="submit" class="login-btn">
+          Entrar
+          <span class="material-symbols-rounded">arrow_forward</span>
+        </button>
+      </form>
+
+      <div class="divider">
+        <span>ou</span>
+      </div>
+
+      <p class="signup-text">
+        Não tem uma conta?
+        <a href="criar-conta.html">Criar conta</a>
+      </p>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container d-flex justify-content-between align-items-center flex-wrap gap-3">
+      <p class="copyright">
+        © 2026 PongoEdu. Todos os direitos reservados.
+      </p>
+
+      
+    </div>
+  </footer>
+
+  <script>
+    const USERS_PATH = "../Assets/Data/users.json";
+
+    const form = document.getElementById("loginForm");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const loginError = document.getElementById("loginError");
+    const togglePassword = document.getElementById("togglePassword");
+
+    togglePassword.addEventListener("click", () => {
+      passwordInput.type =
+        passwordInput.type === "password" ? "text" : "password";
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      loginError.classList.add("d-none");
+
+      const email = emailInput.value.trim().toLowerCase();
+      const password = passwordInput.value.trim();
+
+      try {
+        const response = await fetch(USERS_PATH);
+
+        if (!response.ok) {
+          throw new Error("Erro ao carregar usuários.");
+        }
+
+        const users = await response.json();
+
+        const user = users.find((item) => {
+          return item.email.toLowerCase() === email &&
+                 item.password === password;
+        });
+
+        if (!user) {
+          loginError.textContent = "E-mail ou senha inválidos.";
+          loginError.classList.remove("d-none");
+          return;
+        }
+
+        localStorage.setItem("pongo_user", JSON.stringify(user));
+        localStorage.setItem("pongo_user_profile", user.profile);
+
+        window.location.href = "app.html";
+
+      } catch (error) {
+        loginError.textContent = "Não foi possível validar o login. Verifique o arquivo users.json.";
+        loginError.classList.remove("d-none");
+        console.error(error);
+      }
+    });
+  </script>
+</body>
+</html>

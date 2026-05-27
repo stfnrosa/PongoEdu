@@ -1,0 +1,7 @@
+[
+  { "id": "1", "nome": "Reagentes",    "permiteEmprestimo": false },
+  { "id": "2", "nome": "Vidraria",     "permiteEmprestimo": true  },
+  { "id": "3", "nome": "EPI",          "permiteEmprestimo": false },
+  { "id": "4", "nome": "Equipamentos", "permiteEmprestimo": true  },
+  { "id": "5", "nome": "Descartáveis", "permiteEmprestimo": false }
+]

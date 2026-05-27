@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>PongoEdu App</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet"
+  >
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded"
+    rel="stylesheet"
+  >
+
+  <link rel="stylesheet" href="../Styles/app.css">
+</head>
+
+<body>
+
+  <div class="app-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+      <div class="sidebar-top">
+
+        <a href="#" class="brand">
+
+          <img
+            src="../Assets/Imagens/Pongo.svg"
+            alt="PongoEdu"
+            class="brand-logo"
+          >
+
+          <div>
+
+            <strong class="brand-title">
+              <span>Pongo</span>Edu
+            </strong>
+
+            <small id="user-role">
+              Carregando...
+            </small>
+
+          </div>
+
+        </a>
+
+      </div>
+
+      <!-- MENU -->
+      <nav
+        class="sidebar-menu"
+        id="sidebar-menu"
+      ></nav>
+
+      <!-- FOOTER -->
+      <div class="sidebar-footer">
+
+        <button
+          class="sidebar-action"
+          id="toggle-sidebar"
+        >
+          <span class="material-symbols-rounded">
+            keyboard_tab_rtl
+          </span>
+
+          Recolher menu
+        </button>
+
+        <button
+          class="sidebar-action sidebar-expand-btn"
+          id="expand-sidebar"
+        >
+          <span class="material-symbols-rounded">
+            keyboard_tab
+          </span>
+        </button>
+
+      </div>
+
+    </aside>
+
+    <!-- CONTENT -->
+    <div class="content-wrapper">
+
+      <!-- TOPBAR -->
+      <header class="topbar">
+
+        <div class="topbar-left">
+
+          <button
+            class="mobile-menu-button"
+            id="mobile-menu-button"
+          >
+            <span class="material-symbols-rounded">
+              menu
+            </span>
+          </button>
+
+        </div>
+
+        <div class="topbar-right">
+
+          <!-- NOTIFICATION -->
+          <div class="user-dropdown-wrapper">
+
+            <button class="notification-button" id="notificationButton">
+              <span class="material-symbols-rounded">
+                notifications
+              </span>
+            </button>
+
+            <div class="user-dropdown notification-dropdown" id="notificationDropdown">
+              <div class="dropdown-user-info">
+                <strong>Notificações</strong>
+              </div>
+              <div class="notification-empty">
+                <span class="material-symbols-rounded">notifications_off</span>
+                <p>Nenhuma notificação por aqui.</p>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- USER -->
+          <div class="user-dropdown-wrapper">
+
+            <button class="user-profile" id="userDropdownButton">
+
+              <div id="user-avatar" class="avatar-circle"></div>
+
+              <div class="user-info">
+
+                <strong id="user-name">
+                  Usuário
+                </strong>
+
+                <small id="user-profile-type">
+                  Perfil
+                </small>
+
+              </div>
+
+              <span class="material-symbols-rounded" id="user-dropdown-arrow">
+                expand_more
+              </span>
+
+            </button>
+
+            <div class="user-dropdown" id="userDropdown">
+
+              <div class="dropdown-user-info">
+                <strong id="dropdown-user-name">Usuário</strong>
+                <small id="dropdown-user-role">Perfil</small>
+              </div>
+
+              <button class="dropdown-item" id="goto-perfil-btn">
+                <span class="material-symbols-rounded">person</span>
+                Meu Perfil
+              </button>
+
+              <button class="dropdown-item logout" id="logout-button">
+                <span class="material-symbols-rounded">logout</span>
+                Sair
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </header>
+
+      <!-- MAIN -->
+      <main
+        class="main-content"
+        id="main-content"
+      >
+        <!-- Conteúdo carregado dinamicamente -->
+      </main>
+
+    </div>
+
+  </div>
+
+  <!-- OVERLAY MOBILE -->
+  <div
+    class="sidebar-overlay"
+    id="sidebar-overlay"
+  ></div>
+
+  <script src="../Scripts/app.js"></script>
+
+</body>
+</html>

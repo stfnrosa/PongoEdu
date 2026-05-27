@@ -1,0 +1,172 @@
+[
+  {
+    "id": "1",
+    "codigo": "001",
+    "nome": "Ácido Clorídrico",
+    "categoria": "Reagentes",
+    "quantidade": "500 ml",
+    "validade": "31/12/2026",
+    "localizacao": "Armário A1",
+    "status": "normal"
+  },
+  {
+    "id": "2",
+    "codigo": "002",
+    "nome": "Hidróxido de Sódio",
+    "categoria": "Reagentes",
+    "quantidade": "100 g",
+    "validade": "15/06/2026",
+    "localizacao": "Armário A2",
+    "status": "estoque-baixo"
+  },
+  {
+    "id": "3",
+    "codigo": "003",
+    "nome": "Sulfato de Cobre",
+    "categoria": "Reagentes",
+    "quantidade": "250 g",
+    "validade": "10/03/2025",
+    "localizacao": "Armário B1",
+    "status": "vencido"
+  },
+  {
+    "id": "4",
+    "codigo": "004",
+    "nome": "Ácido Sulfúrico",
+    "categoria": "Reagentes",
+    "quantidade": "1 L",
+    "validade": "20/08/2027",
+    "localizacao": "Armário A1",
+    "status": "normal"
+  },
+  {
+    "id": "5",
+    "codigo": "005",
+    "nome": "Etanol Absoluto",
+    "categoria": "Reagentes",
+    "quantidade": "2 L",
+    "validade": "10/11/2026",
+    "localizacao": "Armário A3",
+    "status": "normal"
+  },
+  {
+    "id": "6",
+    "codigo": "006",
+    "nome": "Fenolftaleína",
+    "categoria": "Reagentes",
+    "quantidade": "50 ml",
+    "validade": "30/04/2026",
+    "localizacao": "Armário B2",
+    "status": "estoque-baixo"
+  },
+  {
+    "id": "7",
+    "codigo": "007",
+    "nome": "Béquer 250 ml",
+    "categoria": "Vidraria",
+    "quantidade": "12 unid.",
+    "validade": "—",
+    "localizacao": "Prateleira C1",
+    "status": "normal"
+  },
+  {
+    "id": "8",
+    "codigo": "008",
+    "nome": "Béquer 500 ml",
+    "categoria": "Vidraria",
+    "quantidade": "6 unid.",
+    "validade": "—",
+    "localizacao": "Prateleira C1",
+    "status": "normal"
+  },
+  {
+    "id": "9",
+    "codigo": "009",
+    "nome": "Erlenmeyer 250 ml",
+    "categoria": "Vidraria",
+    "quantidade": "8 unid.",
+    "validade": "—",
+    "localizacao": "Prateleira C2",
+    "status": "normal"
+  },
+  {
+    "id": "10",
+    "codigo": "010",
+    "nome": "Pipeta Pasteur",
+    "categoria": "Vidraria",
+    "quantidade": "3 pacotes",
+    "validade": "—",
+    "localizacao": "Prateleira C3",
+    "status": "estoque-baixo"
+  },
+  {
+    "id": "11",
+    "codigo": "011",
+    "nome": "Proveta 100 ml",
+    "categoria": "Vidraria",
+    "quantidade": "5 unid.",
+    "validade": "—",
+    "localizacao": "Prateleira C2",
+    "status": "normal"
+  },
+  {
+    "id": "12",
+    "codigo": "012",
+    "nome": "Luvas Nitrílicas",
+    "categoria": "EPI",
+    "quantidade": "2 caixas",
+    "validade": "30/09/2026",
+    "localizacao": "Gaveta D1",
+    "status": "estoque-baixo"
+  },
+  {
+    "id": "13",
+    "codigo": "013",
+    "nome": "Óculos de Proteção",
+    "categoria": "EPI",
+    "quantidade": "15 unid.",
+    "validade": "—",
+    "localizacao": "Gaveta D2",
+    "status": "normal"
+  },
+  {
+    "id": "14",
+    "codigo": "014",
+    "nome": "Jaleco Laboratório",
+    "categoria": "EPI",
+    "quantidade": "10 unid.",
+    "validade": "—",
+    "localizacao": "Armário E1",
+    "status": "normal"
+  },
+  {
+    "id": "15",
+    "codigo": "015",
+    "nome": "Termômetro",
+    "categoria": "Equipamentos",
+    "quantidade": "4 unid.",
+    "validade": "—",
+    "localizacao": "Gaveta F1",
+    "status": "normal"
+  },
+  {
+    "id": "16",
+    "codigo": "016",
+    "nome": "Agitador Magnético",
+    "categoria": "Equipamentos",
+    "quantidade": "2 unid.",
+    "validade": "—",
+    "localizacao": "Bancada G1",
+    "status": "normal"
+  },
+  {
+    "id": "17",
+    "codigo": "017",
+    "nome": "Balança Analítica",
+    "categoria": "Equipamentos",
+    "quantidade": "1 unid.",
+    "validade": "—",
+    "localizacao": "Bancada G2",
+    "status": "normal"
+  }
+]
