@@ -31,11 +31,57 @@
       font-variation-settings: 'FILL' 1, 'wght' 650, 'GRAD' 0, 'opsz' 24;
     }
 
+    /* Evita scroll horizontal em toda a página */
+    body { overflow-x: hidden; }
+    *, *::before, *::after { box-sizing: border-box; }
+    img, video { max-width: 100%; height: auto; }
+
     .navbar {
-      min-height: 98px;
-      background: rgba(255, 255, 255, .9);
+      min-height: 72px;
+      background: rgba(255, 255, 255, .95);
       backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    /* ── Hambúrguer ── */
+    .home-hamburger {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      gap: 5px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 8px;
+    }
+    .home-hamburger span {
+      display: block;
+      width: 22px;
+      height: 2px;
+      background: var(--dark);
+      border-radius: 2px;
+      transition: transform .25s ease, opacity .2s ease;
+    }
+    .home-hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .home-hamburger.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+    .home-hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+    /* ── Painel mobile nav ── */
+    .home-mobile-nav {
+      display: none;
+      border-top: 1px solid var(--border);
+      background: rgba(255,255,255,.98);
+      animation: slideDown .2s ease;
+    }
+    .home-mobile-nav.open { display: block; }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
 
     .logo-img {
@@ -427,4 +473,108 @@
         padding: 24px 12px;
       }
       .cta-box { flex-direction: column; text-align: center; }
+    }
+
+    .navbar-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* ─── Mobile: botões lado a lado e centralizados ─────────────────────── */
+    @media (max-width: 576px) {
+      .navbar-inner      { flex-direction: column; gap: 12px; padding: 12px 0; }
+      .nav-btns          { justify-content: center; }
+      .nav-btns .btn     { font-size: 14px; height: 40px; padding: 0 18px; }
+      .brand-subtitle    { display: none; }
+    }
+
+    /* ─── Tablet / Mobile (≤ 768px) ──────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .hero         { padding: 36px 0 28px; }
+      .main-section { padding: 24px 16px 16px; }
+
+      /* Oculta o mock do dashboard no hero */
+      .dashboard-card { display: none; }
+
+      /* ── Hero: centralizar conteúdo ── */
+      .hero .col-lg-6:first-child { text-align: center; }
+      .badge-soft    { display: inline-flex; margin: 0 auto 12px; }
+      .hero-text     { margin: 0 auto 16px; }
+      /* Botões do hero: ocupam largura total */
+      .btn-green, .btn-demo { width: 100%; justify-content: center; }
+      /* Oculta mini-benefits para ganhar espaço */
+      .hero .row.g-4 { display: none; }
+
+      /* ── Seções: centralizar títulos e kickers ── */
+      .section-kicker { justify-content: center; }
+      .section-title  { text-align: center; font-size: 22px; }
+      .flow-title     { text-align: center; font-size: 20px; }
+
+      /* ── Feature items: 2 colunas já via col-6 col-md-3 ── */
+      .feature-item   { text-align: center; }
+
+      /* ── Como funciona: coluna de texto centralizada ── */
+      .col-lg-4 .section-kicker,
+      .col-lg-4 .flow-title { text-align: center; justify-content: center; }
+
+      /* ── Steps: número centralizado, ícone oculto ── */
+      .step-card              { padding: 16px 14px; text-align: center; display: flex; flex-direction: column; align-items: center; }
+      .step-card .icon-box    { display: none; }
+      .step-card .step-number { position: static; margin: 0 0 10px; }
+
+      /* ── Persona cards ── */
+      .persona-card              { padding: 20px 14px; text-align: center; }
+      .persona-card .icon-box    { margin: 0 auto 12px; }
+
+      /* ── CTA ── */
+      .cta-box {
+        padding: 28px 20px;
+        flex-direction: column;
+        text-align: center;
+        gap: 20px;
+      }
+      .cta-box .btn-green { width: 100%; justify-content: center; }
+      .cta-icon           { display: none; }
+
+      /* ── Footer ── */
+      footer > div { flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+    }
+
+    /* ─── Telefones (≤ 480px) ─────────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      /* Navbar: logo menor, subtítulo oculto — botões ficam no painel hambúrguer */
+      .logo-img        { width: 40px; height: 40px; }
+      .brand-title     { font-size: 17px; }
+      .brand-subtitle  { display: none; }
+
+      /* Painel hambúrguer: botões em tamanho confortável */
+      .home-mobile-nav .btn { font-size: 15px; height: 46px; }
+
+      /* Hero */
+      .hero       { padding: 28px 0 16px; }
+      h1          { font-size: clamp(26px, 7.5vw, 36px) !important; }
+      .hero-text  { font-size: 15px; line-height: 1.6; }
+      .badge-soft { font-size: 13px; padding: 7px 14px; }
+      .btn-green, .btn-demo { font-size: 15px; height: 48px; }
+
+      /* Seções */
+      .main-section   { padding: 20px 14px 12px; }
+      .section-title  { font-size: 22px; }
+      .section-kicker { font-size: 13px; }
+
+      /* Features */
+      .feature-item h5 { font-size: 15px; }
+      .feature-item p  { display: none; }
+
+      /* Steps */
+      .step-card h5 { font-size: 15px; }
+      .step-card p  { font-size: 13px; }
+
+      /* Personas */
+      .persona-card h5 { font-size: 15px; }
+      .persona-card p  { display: none; }
+
+      /* CTA */
+      .cta-box h3 { font-size: 20px; }
     }

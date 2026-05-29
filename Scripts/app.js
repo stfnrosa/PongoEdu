@@ -1,6 +1,79 @@
 const BASE_DATA = "../Assets/Data";
 const LOGIN_PATH = "entrar.html";
 
+/* ===== Componentes reutilizáveis (Bootstrap) ===== */
+
+function btnCreate({ id = "", label, icon = "add" } = {}) {
+  return `
+    <button class="new-item-btn" id="${id}" type="button">
+      <span class="material-symbols-rounded">${icon}</span>
+      ${label}
+    </button>`;
+}
+
+function btnModalConfirm({ id = "", label, icon = "check" } = {}) {
+  return `
+    <button class="btn btn-success btn-pongo fw-bold d-flex align-items-center gap-2" id="${id}" type="button">
+      <span class="material-symbols-rounded" style="font-size:17px">${icon}</span>
+      ${label}
+    </button>`;
+}
+
+function btnModalCancel({ id = "", label = "Cancelar" } = {}) {
+  return `<button class="btn btn-outline-secondary btn-pongo" id="${id}" type="button">${label}</button>`;
+}
+
+function btnModalDanger({ id = "", label } = {}) {
+  return `<button class="btn btn-outline-danger btn-pongo" id="${id}" type="button">${label}</button>`;
+}
+
+function resultBadge(count, unit = "resultado(s)") {
+  return `<span class="badge bg-pongo-purple rounded-pill">${count} ${unit}</span>`;
+}
+
+function exportCSV(filename, headers, rows) {
+  const escape = v => {
+    const s = String(v ?? "").replace(/"/g, '""');
+    return /[,"\n]/.test(s) ? `"${s}"` : s;
+  };
+  const lines = [
+    headers.map(escape).join(","),
+    ...rows.map(r => r.map(escape).join(","))
+  ];
+  const bom = "﻿"; // UTF-8 BOM para Excel reconhecer acentos
+  const blob = new Blob([bom + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`"${filename}" exportado com sucesso.`);
+}
+
+function showToast(message, type = "success") {
+  const existing = document.getElementById("pongo-toast");
+  if (existing) existing.remove();
+
+  const icons = { success: "check_circle", error: "error", warning: "warning" };
+  const colors = { success: "#08b44f", error: "#ff304f", warning: "#ff7a1a" };
+
+  const toast = document.createElement("div");
+  toast.id = "pongo-toast";
+  toast.className = "pongo-toast";
+  toast.innerHTML = `
+    <span class="material-symbols-rounded" style="color:${colors[type]};font-size:20px">${icons[type]}</span>
+    <span>${message}</span>
+  `;
+  document.body.appendChild(toast);
+
+  requestAnimationFrame(() => toast.classList.add("pongo-toast--visible"));
+  setTimeout(() => {
+    toast.classList.remove("pongo-toast--visible");
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
 let appData = null;
 let currentUser = null;
 let currentProfile = null;
@@ -11,6 +84,10 @@ let currentEditId = null;
 
 let localCategorias = null;
 let currentEditCategoriaId = null;
+
+let localRoteiros = null;
+let roteirosFilter = { search: "", categoria: "all" };
+let currentEditRoteiroId = null;
 
 function getLocalCategorias() {
   if (!localCategorias) {
@@ -72,20 +149,25 @@ async function initApp() {
     localStorage.setItem("pongo_user", JSON.stringify(currentUser));
   }
 
-  const [profileData, agendamentos, categorias, produtos] = await Promise.all([
+  const [profileData, agendamentos, categorias, produtos, roteiros, emprestimos] = await Promise.all([
     loadJSON(`${BASE_DATA}/profiles/${currentUser.profile}.json`),
     loadJSON(`${BASE_DATA}/agendamentos.json`),
     loadJSON(`${BASE_DATA}/categorias.json`),
     loadJSON(`${BASE_DATA}/produtos.json`),
+    loadJSON(`${BASE_DATA}/roteiros.json`),
+    loadJSON(`${BASE_DATA}/emprestimos.json`),
   ]);
 
   localProdutos = produtos;
+  localRoteiros = JSON.parse(JSON.stringify(roteiros || []));
   appData = {
     profiles:   { [currentUser.profile]: { role: profileData.role } },
     menus:      { [currentUser.profile]: profileData.menu },
     dashboards: { [currentUser.profile]: profileData.dashboard },
     agendamentos,
     categorias,
+    roteiros,
+    emprestimos: JSON.parse(JSON.stringify(emprestimos || [])),
   };
 
   currentProfile = appData.profiles[currentUser.profile];
@@ -115,7 +197,7 @@ async function loadJSON(path) {
 function renderUserInfo() {
 
   document.getElementById("user-role").textContent =
-    currentProfile.role;
+    "Gestão de Laboratórios";
 
   document.getElementById("user-name").textContent =
     currentUser.name;
@@ -130,7 +212,10 @@ function renderUserInfo() {
   if (dropdownRole) dropdownRole.textContent = currentProfile.role;
 
   const avatarEl = document.getElementById("user-avatar");
-  if (avatarEl) avatarEl.textContent = currentUser.avatar || "👤";
+  if (avatarEl) {
+    avatarEl.textContent = currentUser.avatar || "👤";
+    if (currentUser.avatarColor) avatarEl.style.background = currentUser.avatarColor;
+  }
 }
 
 function renderMenu() {
@@ -202,6 +287,18 @@ function bindMenuEvents() {
       closeMobileSidebar();
     });
   });
+
+  document.getElementById("main-content")?.addEventListener("click", (event) => {
+    const link = event.target.closest("[data-page]");
+    if (!link) return;
+    event.preventDefault();
+    const sidebarLink = document.querySelector(
+      `.menu-item[data-page="${link.dataset.page}"], .submenu-item[data-page="${link.dataset.page}"]`
+    );
+    if (sidebarLink) setActiveMenu(sidebarLink);
+    loadPage(link.dataset.page);
+    closeMobileSidebar();
+  });
 }
 
 function setActiveMenu(activeLink) {
@@ -213,6 +310,7 @@ function setActiveMenu(activeLink) {
 }
 
 function loadPage(page) {
+  closeMobileSidebar();
   if (page === "dashboard") {
     renderDashboard();
     setDashboardMenuActive();
@@ -226,6 +324,16 @@ function loadPage(page) {
 
   if (page === "categorias-produtos") {
     renderCategorias();
+    return;
+  }
+
+  if (page === "meus-roteiros") {
+    renderRoteiros();
+    return;
+  }
+
+  if (page === "emprestimos") {
+    renderEmprestimos();
     return;
   }
 
@@ -250,13 +358,105 @@ function setDashboardMenuActive() {
   }
 }
 
+function enrichDashboardData(dashboard, profile) {
+  const data     = JSON.parse(JSON.stringify(dashboard));
+  const today    = new Date().toISOString().slice(0, 10);
+
+  const agendamentos = appData.agendamentos || [];
+  const emprestimos  = appData.emprestimos  || [];
+  const roteiros     = localRoteiros        || [];
+
+  const todayAgend = agendamentos.filter(a => a.data === today);
+
+  const futureLimit = new Date();
+  futureLimit.setDate(futureLimit.getDate() + 7);
+  const futureLimitStr = futureLimit.toISOString().slice(0, 10);
+  const upcoming = agendamentos.filter(a => a.data >= today && a.data <= futureLimitStr);
+
+  if (profile === "professor") {
+    data.agendamentosHoje.items = todayAgend.length > 0
+      ? todayAgend.map(a => ({
+          inicio: a.horaInicio,
+          fim:    a.horaFim,
+          titulo: a.titulo,
+          turma:  a.turma,
+          alunos: "",
+          status: a.status === "preparado" ? "confirmado" : "em-preparacao",
+        }))
+      : [{ inicio: "—", fim: "—", titulo: "Nenhum agendamento hoje", turma: "", alunos: "", status: "em-preparacao" }];
+
+    const aguardando = agendamentos.filter(a => a.status === "pendente");
+    data.praticasPreparadas.title     = "Práticas Aguardando";
+    data.praticasPreparadas.icon      = "schedule";
+    data.praticasPreparadas.iconColor = "yellow";
+    data.praticasPreparadas.items = aguardando.map(a => ({
+      titulo:    a.titulo,
+      descricao: `${a.roteiro} • ${formatDateBR(a.data)} às ${a.horaInicio}`,
+      status:    "pendente",
+      tempo:     a.data === today ? "Hoje" : formatDateBR(a.data),
+    }));
+
+    data.table.iconColor  = "green";
+    data.table.footerPage = "meus-roteiros";
+    data.table.rows = roteiros.map(r => [
+      { type: "iconText", icon: "assignment", text: r.titulo, color: "green" },
+      r.categoria,
+      `${(r.materiais || []).length} item(ns)`,
+      r.turma || "—",
+    ]);
+  }
+
+  if (profile === "auxiliar") {
+    const pendentes    = agendamentos.filter(a => a.status === "pendente").length;
+    const reservasHoje = todayAgend.length;
+    const aVencer      = upcoming.length;
+
+    data.summary.items[0].value = String(pendentes);
+    data.summary.items[2].value = String(aVencer);
+    data.summary.items[3].value = String(reservasHoje);
+
+    const empStatusMap = {
+      "agendado":     { label: "Empréstimo agendado",     icon: "schedule",     color: "blue"   },
+      "em-andamento": { label: "Empréstimo em andamento", icon: "swap_horiz",   color: "orange" },
+      "concluido":    { label: "Empréstimo concluído",    icon: "check_circle", color: "green"  },
+    };
+    data.activities.items = [...emprestimos].reverse().slice(0, 4).map(e => {
+      const s = empStatusMap[e.status] || { label: "Empréstimo", icon: "history", color: "purple" };
+      return {
+        title: `${s.label}: ${e.produto}`,
+        time:  `${formatDateBR(e.dataInicio)} às ${e.horaInicio}`,
+        icon:  s.icon,
+        color: s.color,
+      };
+    });
+  }
+
+  return data;
+}
+
 function renderDashboard() {
-  const dashboard = appData.dashboards[currentUser.profile];
+  const dashboard = enrichDashboardData(
+    appData.dashboards[currentUser.profile],
+    currentUser.profile
+  );
 
   document.getElementById("main-content").innerHTML = `
     ${createHeroSection(dashboard)}
     ${createDashboardGrid(dashboard)}
   `;
+
+  document.getElementById("dashboard-export-btn")?.addEventListener("click", () => {
+    const headers = ["Nome", "Categoria", "Duração", "Turma", "Observação", "Qtd. Materiais"];
+    const rows = (localRoteiros || []).map(r => [
+      r.titulo, r.categoria, formatDuracao(r.duracao),
+      r.turma || "", r.observacao || "", (r.materiais || []).length
+    ]);
+    if (rows.length === 0) {
+      showToast("Nenhum roteiro para exportar.", "warning");
+      return;
+    }
+    exportCSV("roteiros.csv", headers, rows);
+  });
 }
 
 function createHeroSection(data) {
@@ -353,7 +553,7 @@ function createAgendamentosHoje(data) {
           <span class="material-symbols-rounded purple">${data.icon}</span>
           ${data.title}
         </div>
-        <a href="#" class="card-link">
+        <a href="#" class="card-link" data-page="meus-agendamentos">
           Ver todos
           <span class="material-symbols-rounded">arrow_forward</span>
         </a>
@@ -370,7 +570,7 @@ function createAgendamentosHoje(data) {
               </div>
               <div class="agenda-body">
                 <span class="agenda-titulo">${item.titulo}</span>
-                <span class="agenda-info">${item.turma} • ${item.alunos} alunos</span>
+                <span class="agenda-info">${item.turma}${item.alunos ? ` • ${item.alunos} alunos` : ""}</span>
               </div>
               <span class="agenda-status ${s.cls}">${s.label}</span>
             </div>
@@ -391,10 +591,10 @@ function createPraticasPreparadas(data) {
     <div class="card">
       <div class="card-header-line">
         <div class="card-title">
-          <span class="material-symbols-rounded green">${data.icon}</span>
+          <span class="material-symbols-rounded ${data.iconColor || "green"}">${data.icon}</span>
           ${data.title}
         </div>
-        <a href="#" class="card-link">
+        <a href="#" class="card-link" data-page="meus-agendamentos">
           Ver todas
           <span class="material-symbols-rounded">arrow_forward</span>
         </a>
@@ -456,13 +656,13 @@ function createMainTable(table) {
     <div class="card">
       <div class="card-header-line">
         <div class="card-title">
-          <span class="material-symbols-rounded orange">${table.icon}</span>
+          <span class="material-symbols-rounded ${table.iconColor || "orange"}">${table.icon}</span>
           ${table.title}
         </div>
 
-        ${table.showLink !== false ? `
-          <a href="#" class="card-link">
-            Ver todas
+        ${table.footerPage ? `
+          <a href="#" class="card-link" data-page="${table.footerPage}">
+            Ver todos
             <span class="material-symbols-rounded">arrow_forward</span>
           </a>
         ` : ""}
@@ -475,7 +675,7 @@ function createMainTable(table) {
             <input type="text" placeholder="${table.searchPlaceholder}">
           </label>
 
-          <button class="export-btn">
+          <button class="export-btn" id="dashboard-export-btn">
             <span class="material-symbols-rounded">download</span>
             Exportar
           </button>
@@ -500,12 +700,6 @@ function createMainTable(table) {
         </table>
       </div>
 
-      <div class="see-all">
-        <a href="#">
-          ${table.footerLink}
-          <span class="material-symbols-rounded">arrow_forward</span>
-        </a>
-      </div>
     </div>
   `;
 }
@@ -630,7 +824,9 @@ function renderProdutos() {
   const categorias = getLocalCategorias();
 
   document.getElementById("main-content").innerHTML = `
-    <div class="produtos-page">
+    <div class="agend-page">
+      <h1 class="page-section-title">Produtos</h1>
+      <p class="page-section-sub">Consulte o inventário de materiais e reagentes disponíveis no laboratório.</p>
       <div class="page-toolbar">
         <label class="page-search">
           <span class="material-symbols-rounded">search</span>
@@ -657,17 +853,11 @@ function renderProdutos() {
           </div>
         </div>
 
-        <button class="export-btn-outline">
+        <button class="export-btn-outline" id="produtos-export-btn">
           <span class="material-symbols-rounded">download</span>
           Exportar
         </button>
 
-        ${isAuxiliar ? `
-          <button class="new-item-btn" id="new-produto-btn">
-            <span class="material-symbols-rounded">add</span>
-            Novo Produto
-          </button>
-        ` : ""}
       </div>
 
       <div id="produtos-table-container">
@@ -675,10 +865,362 @@ function renderProdutos() {
       </div>
 
       ${isAuxiliar ? buildCriarProdutoModal(categorias) : ""}
+      ${buildViewProdutoModal()}
     </div>
   `;
 
   bindProdutosEvents(isAuxiliar);
+}
+
+function formatDateBR(dateStr) {
+  if (!dateStr) return "—";
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function buildEmprestimosList(items) {
+  const statusMap = {
+    pendente:      { label: "Pendente",     cls: "emp-status-agendado",  icon: "schedule" },
+    agendado:      { label: "Agendado",     cls: "emp-status-agendado",  icon: "schedule" },
+    "em-andamento":{ label: "Em andamento", cls: "emp-status-andamento", icon: "autorenew" },
+    concluido:     { label: "Concluído",    cls: "emp-status-concluido", icon: "check_circle" },
+  };
+  const editableStatuses = ["pendente", "agendado"];
+
+  if (items.length === 0) {
+    return `<tr class="table-empty-row"><td colspan="6">Nenhum empréstimo encontrado.</td></tr>`;
+  }
+
+  return items.map(e => {
+    const s = statusMap[e.status] || { label: e.status, cls: "", icon: "help" };
+    const canEdit = editableStatuses.includes(e.status);
+    return `
+      <tr>
+        <td><span class="emp-produto-nome">${e.produto}</span></td>
+        <td>${e.quantidade}</td>
+        <td>${formatDateBR(e.dataInicio)} ${e.horaInicio}</td>
+        <td>${formatDateBR(e.dataFim)} ${e.horaFim}</td>
+        <td>
+          <span class="emp-status ${s.cls}">
+            <span class="material-symbols-rounded">${s.icon}</span>
+            ${s.label}
+          </span>
+        </td>
+        <td>
+          <div class="action-cell">
+            <button class="action-icon-btn" title="Visualizar" data-view-emp-id="${e.id}">
+              <span class="material-symbols-rounded">visibility</span>
+            </button>
+            ${canEdit ? `
+            <button class="action-icon-btn" title="Editar" data-edit-emp-id="${e.id}">
+              <span class="material-symbols-rounded">edit</span>
+            </button>
+            <button class="action-icon-btn delete" title="Excluir" data-delete-emp-id="${e.id}">
+              <span class="material-symbols-rounded">delete</span>
+            </button>` : ""}
+          </div>
+        </td>
+      </tr>`;
+  }).join("");
+}
+
+function buildCriarEmprestimoModal() {
+  const categorias = getLocalCategorias();
+  const produtos = (localProdutos || []).filter(p => {
+    const cat = categorias.find(c => c.nome === p.categoria);
+    return cat?.permiteEmprestimo === true;
+  });
+
+  return `
+    <div class="modal-overlay" id="criar-emp-modal">
+      <div class="modal-card modal-card-wide">
+        <div class="modal-header">
+          <span class="modal-title">Nova Solicitação de Empréstimo</span>
+          <button class="modal-close" id="emp-modal-close">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          
+
+          <div class="modal-field">
+            <label>Produto <span class="required-star">*</span></label>
+            <select id="emp-produto">
+              <option value="">Buscar produto...</option>
+              ${produtos.map(p => `<option value="${p.id}">${p.nome} (${p.categoria})</option>`).join("")}
+            </select>
+          </div>
+
+          <div class="modal-field">
+            <label>Quantidade</label>
+            <div class="emp-qty-control">
+              <button class="emp-qty-btn" id="emp-qty-minus" type="button">
+                <span class="material-symbols-rounded">remove</span>
+              </button>
+              <input class="emp-qty-input" type="number" id="emp-qty" value="1" min="1" max="99">
+              <button class="emp-qty-btn" id="emp-qty-plus" type="button">
+                <span class="material-symbols-rounded">add</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="modal-field">
+            <label>Período de uso</label>
+            <div class="modal-row" style="margin-top:4px">
+              <div class="modal-field">
+                <label style="font-size:11px;color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0">Data e hora de início</label>
+                <input type="datetime-local" id="emp-inicio">
+              </div>
+              <div class="modal-field">
+                <label style="font-size:11px;color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0">Data e hora de término</label>
+                <input type="datetime-local" id="emp-fim">
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-field">
+            <label>Observações</label>
+            <textarea id="emp-obs" placeholder="Descreva a atividade ou objetivo do empréstimo..." rows="3"></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          ${btnModalCancel({ id: "emp-modal-cancel" })}
+          ${btnModalConfirm({ id: "emp-modal-confirm", label: "Enviar Solicitação", icon: "send" })}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderEmprestimos() {
+  const empData = appData.emprestimos || [];
+  let empFilter = { search: "", status: "all" };
+
+  const renderList = () => {
+    const q = empFilter.search.toLowerCase();
+    const filtered = empData.filter(e => {
+      const matchSearch = !q || e.produto.toLowerCase().includes(q);
+      const matchStatus = empFilter.status === "all" || e.status === empFilter.status;
+      return matchSearch && matchStatus;
+    });
+    const container = document.getElementById("emp-list-container");
+    if (container) container.innerHTML = buildEmprestimosList(filtered);
+    const badge = document.getElementById("emp-result-badge");
+    if (badge) badge.outerHTML; // atualiza via re-render completo
+    return filtered;
+  };
+
+  document.getElementById("main-content").innerHTML = `
+    <div class="agend-page">
+      <h1 class="page-section-title">Empréstimos</h1>
+      <p class="page-section-sub">Acompanhe os empréstimos de materiais e equipamentos do laboratório.</p>
+      <div class="page-toolbar">
+        <label class="page-search">
+          <span class="material-symbols-rounded">search</span>
+          <input type="text" id="emp-search" placeholder="Buscar equipamento...">
+        </label>
+
+        <div class="filter-dropdown-wrap">
+          <button class="filter-btn" id="emp-status-filter-btn">
+            <span class="material-symbols-rounded">filter_list</span>
+            Filtrar status
+            <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
+          </button>
+          <div class="filter-dropdown-menu" id="emp-status-filter-menu">
+            ${[
+              { key: "all",          label: "Todos" },
+              { key: "pendente",     label: "Pendente" },
+              { key: "agendado",     label: "Agendado" },
+              { key: "em-andamento", label: "Em andamento" },
+              { key: "concluido",    label: "Concluído" },
+            ].map((o, i) => `
+              <div class="filter-option ${i === 0 ? "active" : ""}" data-emp-status="${o.key}">${o.label}</div>
+            `).join("")}
+          </div>
+        </div>
+
+        <button class="export-btn-outline" id="emp-export-btn">
+          <span class="material-symbols-rounded">download</span>
+          Exportar
+        </button>
+      </div>
+
+      <div class="list-card">
+        <div class="list-card-header">
+          <span class="list-card-title">Lista de Empréstimos</span>
+          <div style="display:flex;align-items:center;gap:12px">
+            ${resultBadge(empData.length)}
+            ${btnCreate({ id: "new-emprestimo-btn", label: "Criar Empréstimo" })}
+          </div>
+        </div>
+        <div class="list-card-inner">
+          <div class="table-wrap">
+            <table class="produtos-table tbl-emprestimos">
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Quantidade</th>
+                  <th>Data início</th>
+                  <th>Data fim</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="emp-list-container">
+                ${buildEmprestimosList(empData)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      ${buildCriarEmprestimoModal()}
+    </div>
+  `;
+
+  // Modal Criar Empréstimo
+  const openEmpModal = () => {
+    ["emp-produto", "emp-qty", "emp-inicio", "emp-fim", "emp-obs"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.value = id === "emp-qty" ? "1" : ""; el.classList.remove("field-error"); }
+    });
+    document.getElementById("criar-emp-modal")?.classList.add("open");
+  };
+  const closeEmpModal = () => document.getElementById("criar-emp-modal")?.classList.remove("open");
+
+  document.getElementById("new-emprestimo-btn")?.addEventListener("click", openEmpModal);
+  document.getElementById("emp-modal-close")?.addEventListener("click", closeEmpModal);
+  document.getElementById("emp-modal-cancel")?.addEventListener("click", closeEmpModal);
+  document.getElementById("criar-emp-modal")?.addEventListener("click", e => {
+    if (e.target === e.currentTarget) closeEmpModal();
+  });
+
+  document.getElementById("emp-qty-minus")?.addEventListener("click", () => {
+    const el = document.getElementById("emp-qty");
+    if (el && parseInt(el.value) > 1) el.value = parseInt(el.value) - 1;
+  });
+  document.getElementById("emp-qty-plus")?.addEventListener("click", () => {
+    const el = document.getElementById("emp-qty");
+    if (el) el.value = parseInt(el.value || 0) + 1;
+  });
+
+  document.getElementById("emp-modal-confirm")?.addEventListener("click", () => {
+    const produtoEl = document.getElementById("emp-produto");
+    const inicioEl  = document.getElementById("emp-inicio");
+    const fimEl     = document.getElementById("emp-fim");
+
+    [produtoEl, inicioEl, fimEl].forEach(el => el?.classList.remove("field-error"));
+    let valid = true;
+    if (!produtoEl?.value) { produtoEl.classList.add("field-error"); valid = false; }
+    if (!inicioEl?.value)  { inicioEl.classList.add("field-error");  valid = false; }
+    if (!fimEl?.value)     { fimEl.classList.add("field-error");     valid = false; }
+    if (!valid) return;
+
+    const produto = localProdutos?.find(p => p.id === produtoEl.value);
+    const [dataInicio, horaInicio] = inicioEl.value.split("T");
+    const [dataFim,    horaFim]    = fimEl.value.split("T");
+    const qty = document.getElementById("emp-qty")?.value || "1";
+
+    const novo = {
+      id: String(Date.now()),
+      produto: produto?.nome || produtoEl.value,
+      quantidade: `${qty} unidade${qty > 1 ? "s" : ""}`,
+      dataInicio, horaInicio: horaInicio?.slice(0,5) || "",
+      dataFim,    horaFim:    horaFim?.slice(0,5)    || "",
+      status: "agendado",
+    };
+    appData.emprestimos.push(novo);
+    empData.push(novo);
+
+    closeEmpModal();
+    const container = document.getElementById("emp-list-container");
+    if (container) container.innerHTML = buildEmprestimosList(empData);
+    bindEmpActions();
+    showToast("Solicitação de empréstimo enviada com sucesso.");
+  });
+
+  document.getElementById("emp-search")?.addEventListener("input", e => {
+    empFilter.search = e.target.value;
+    const q = empFilter.search.toLowerCase();
+    const filtered = empData.filter(ev => {
+      const matchSearch = !q || ev.produto.toLowerCase().includes(q);
+      const matchStatus = empFilter.status === "all" || ev.status === empFilter.status;
+      return matchSearch && matchStatus;
+    });
+    const container = document.getElementById("emp-list-container");
+    if (container) container.innerHTML = buildEmprestimosList(filtered);
+  });
+
+  const empBtn  = document.getElementById("emp-status-filter-btn");
+  const empMenu = document.getElementById("emp-status-filter-menu");
+  empBtn?.addEventListener("click", e => { e.stopPropagation(); empMenu.classList.toggle("open"); });
+  empMenu?.querySelectorAll(".filter-option").forEach(opt => {
+    opt.addEventListener("click", e => {
+      e.stopPropagation();
+      empFilter.status = opt.dataset.empStatus;
+      empMenu.classList.remove("open");
+      empBtn.classList.toggle("active-filter", empFilter.status !== "all");
+      empMenu.querySelectorAll(".filter-option").forEach(o =>
+        o.classList.toggle("active", o === opt)
+      );
+      const q = empFilter.search.toLowerCase();
+      const filtered = empData.filter(ev => {
+        const matchSearch = !q || ev.produto.toLowerCase().includes(q);
+        const matchStatus = empFilter.status === "all" || ev.status === empFilter.status;
+        return matchSearch && matchStatus;
+      });
+      const container = document.getElementById("emp-list-container");
+      if (container) container.innerHTML = buildEmprestimosList(filtered);
+    });
+  });
+  document.addEventListener("click", () => empMenu?.classList.remove("open"));
+
+  document.getElementById("emp-export-btn")?.addEventListener("click", () => {
+    const headers = ["Produto", "Quantidade", "Data Início", "Hora Início", "Data Fim", "Hora Fim", "Status"];
+    const statusLabel = { pendente: "Pendente", agendado: "Agendado", "em-andamento": "Em andamento", concluido: "Concluído" };
+    const rows = empData.map(e => [
+      e.produto, e.quantidade,
+      formatDateBR(e.dataInicio), e.horaInicio,
+      formatDateBR(e.dataFim), e.horaFim,
+      statusLabel[e.status] || e.status
+    ]);
+    exportCSV("emprestimos.csv", headers, rows);
+  });
+
+  const bindEmpActions = () => {
+    document.querySelectorAll("[data-view-emp-id]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const e = empData.find(x => x.id === btn.dataset.viewEmpId);
+        if (!e) return;
+        showToast(`${e.produto} — ${formatDateBR(e.dataInicio)} ${e.horaInicio} até ${formatDateBR(e.dataFim)} ${e.horaFim}`);
+      });
+    });
+
+    document.querySelectorAll("[data-delete-emp-id]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const e = empData.find(x => x.id === btn.dataset.deleteEmpId);
+        if (!e) return;
+        if (!confirm(`Tem certeza que deseja excluir o empréstimo de "${e.produto}"? Esta ação não poderá ser desfeita.`)) return;
+        const idx = appData.emprestimos.findIndex(x => x.id === e.id);
+        if (idx !== -1) appData.emprestimos.splice(idx, 1);
+        empData.splice(empData.indexOf(e), 1);
+        const container = document.getElementById("emp-list-container");
+        if (container) container.innerHTML = buildEmprestimosList(empData);
+        bindEmpActions();
+        showToast("Empréstimo excluído com sucesso.");
+      });
+    });
+
+    document.querySelectorAll("[data-edit-emp-id]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const e = empData.find(x => x.id === btn.dataset.editEmpId);
+        if (e) showToast(`Edição de "${e.produto}" será disponibilizada em breve.`, "warning");
+      });
+    });
+  };
+
+  bindEmpActions();
 }
 
 function getFilteredProdutos() {
@@ -697,7 +1239,7 @@ function buildProdutosTable(produtos, isAuxiliar) {
   const statusLabels = { normal: "Normal", "estoque-baixo": "Estoque baixo", vencido: "Vencido" };
 
   const rows = produtos.length === 0
-    ? `<tr class="table-empty-row"><td colspan="${isAuxiliar ? 7 : 6}">Nenhum produto encontrado.</td></tr>`
+    ? `<tr class="table-empty-row"><td colspan="7">Nenhum produto encontrado.</td></tr>`
     : produtos.map(p => `
         <tr>
           <td>
@@ -714,18 +1256,21 @@ function buildProdutosTable(produtos, isAuxiliar) {
             </div>
           </td>
           <td><span class="status-pill ${p.status}">${statusLabels[p.status] || p.status}</span></td>
-          ${isAuxiliar ? `
-            <td>
-              <div class="action-cell">
+          <td>
+            <div class="action-cell">
+              <button class="action-icon-btn" title="Visualizar" data-view-produto-id="${p.id}">
+                <span class="material-symbols-rounded">visibility</span>
+              </button>
+              ${isAuxiliar ? `
                 <button class="action-icon-btn" title="Editar" data-edit-id="${p.id}">
                   <span class="material-symbols-rounded">edit</span>
                 </button>
                 <button class="action-icon-btn delete" title="Excluir" data-delete-id="${p.id}">
                   <span class="material-symbols-rounded">delete</span>
                 </button>
-              </div>
-            </td>
-          ` : ""}
+              ` : ""}
+            </div>
+          </td>
         </tr>
       `).join("");
 
@@ -733,11 +1278,14 @@ function buildProdutosTable(produtos, isAuxiliar) {
     <div class="list-card">
       <div class="list-card-header">
         <span class="list-card-title">Lista de Produtos</span>
-        <span class="result-badge">${produtos.length} resultado(s)</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          ${resultBadge(produtos.length)}
+          ${isAuxiliar ? btnCreate({ id: "new-produto-btn", label: "Novo Produto" }) : ""}
+        </div>
       </div>
       <div class="list-card-inner">
         <div class="table-wrap">
-          <table class="produtos-table">
+          <table class="produtos-table tbl-produtos">
             <thead>
               <tr>
                 <th>Produtos</th>
@@ -746,7 +1294,7 @@ function buildProdutosTable(produtos, isAuxiliar) {
                 <th>Validade</th>
                 <th>Localização</th>
                 <th>Status</th>
-                ${isAuxiliar ? "<th>Ações</th>" : ""}
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -812,6 +1360,66 @@ function buildCriarProdutoModal(categorias) {
   `;
 }
 
+function buildViewProdutoModal() {
+  return `
+    <div class="modal-overlay" id="view-produto-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <span class="modal-title">Detalhes do Produto</span>
+          <button class="modal-close" id="view-produto-close">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Nome</label>
+              <div class="view-field-value" id="view-prod-nome"></div>
+            </div>
+            <div class="modal-field">
+              <label>Código</label>
+              <div class="view-field-value" id="view-prod-codigo"></div>
+            </div>
+          </div>
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Categoria</label>
+              <div class="view-field-value" id="view-prod-categoria"></div>
+            </div>
+            <div class="modal-field">
+              <label>Quantidade</label>
+              <div class="view-field-value" id="view-prod-quantidade"></div>
+            </div>
+          </div>
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Validade</label>
+              <div class="view-field-value" id="view-prod-validade"></div>
+            </div>
+            <div class="modal-field">
+              <label>Localização</label>
+              <div class="view-field-value" id="view-prod-localizacao"></div>
+            </div>
+          </div>
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Status</label>
+              <div id="view-prod-status"></div>
+            </div>
+            <div class="modal-field">
+              <label>Permite Empréstimo</label>
+              <div id="view-prod-emprestimo"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-modal-cancel" id="view-produto-close-btn">Fechar</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function refreshProdutosTable(isAuxiliar) {
   const container = document.getElementById("produtos-table-container");
   if (container) {
@@ -821,6 +1429,37 @@ function refreshProdutosTable(isAuxiliar) {
 }
 
 function bindTableButtons(isAuxiliar) {
+  const statusLabels = { normal: "Normal", "estoque-baixo": "Estoque baixo", vencido: "Vencido" };
+
+  document.querySelectorAll("[data-view-produto-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const p = localProdutos.find(x => x.id === btn.dataset.viewProdutoId);
+      if (!p) return;
+      document.getElementById("view-prod-nome").textContent       = p.nome;
+      document.getElementById("view-prod-codigo").textContent     = p.codigo;
+      document.getElementById("view-prod-categoria").textContent  = p.categoria;
+      document.getElementById("view-prod-quantidade").textContent = p.quantidade;
+      document.getElementById("view-prod-validade").textContent   = p.validade;
+      document.getElementById("view-prod-localizacao").textContent= p.localizacao;
+      document.getElementById("view-prod-status").innerHTML =
+        `<span class="status-pill ${p.status}">${statusLabels[p.status] || p.status}</span>`;
+      const cat = getLocalCategorias().find(c => c.nome === p.categoria);
+      const permiteEmp = cat?.permiteEmprestimo === true;
+      document.getElementById("view-prod-emprestimo").innerHTML =
+        permiteEmp
+          ? `<span class="status-pill normal">Sim</span>`
+          : `<span class="status-pill estoque-baixo">Não</span>`;
+      document.getElementById("view-produto-modal").classList.add("open");
+    });
+  });
+
+  const closeView = () => document.getElementById("view-produto-modal")?.classList.remove("open");
+  document.getElementById("view-produto-close")?.addEventListener("click", closeView);
+  document.getElementById("view-produto-close-btn")?.addEventListener("click", closeView);
+  document.getElementById("view-produto-modal")?.addEventListener("click", e => {
+    if (e.target === e.currentTarget) closeView();
+  });
+
   document.querySelectorAll("[data-delete-id]").forEach(btn => {
     btn.addEventListener("click", () => {
       localProdutos = localProdutos.filter(p => p.id !== btn.dataset.deleteId);
@@ -854,6 +1493,15 @@ function bindProdutosEvents(isAuxiliar) {
   document.getElementById("produtos-search")?.addEventListener("input", e => {
     produtosFilter.search = e.target.value;
     refreshProdutosTable(isAuxiliar);
+  });
+
+  document.getElementById("produtos-export-btn")?.addEventListener("click", () => {
+    const headers = ["Código", "Nome", "Categoria", "Quantidade", "Validade", "Localização", "Status"];
+    const statusLabel = { normal: "Normal", "estoque-baixo": "Estoque baixo", vencido: "Vencido" };
+    const rows = getFilteredProdutos().map(p => [
+      p.codigo, p.nome, p.categoria, p.quantidade, p.validade, p.localizacao, statusLabel[p.status] || p.status
+    ]);
+    exportCSV("produtos.csv", headers, rows);
   });
 
   const statusBtn = document.getElementById("status-filter-btn");
@@ -938,6 +1586,488 @@ function bindProdutosEvents(isAuxiliar) {
   });
 }
 
+/* ===== Roteiros ===== */
+
+function formatDuracao(d) {
+  if (!d) return "—";
+  const h = d.horas || 0;
+  const m = d.minutos || 0;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}min`;
+}
+
+function renderRoteiros() {
+  roteirosFilter = { search: "", categoria: "all" };
+  const categoriasDisciplina = ["Química", "Física", "Biologia", "Ciências", "Outros"];
+
+  document.getElementById("main-content").innerHTML = `
+    <div class="agend-page">
+      <h1 class="page-section-title">Roteiros</h1>
+      <p class="page-section-sub">Crie e gerencie os roteiros de prática utilizados nos agendamentos de laboratório.</p>
+      <div class="page-toolbar">
+        <label class="page-search">
+          <span class="material-symbols-rounded">search</span>
+          <input type="text" id="roteiros-search" placeholder="Buscar roteiro...">
+        </label>
+
+        <div class="filter-dropdown-wrap">
+          <button class="filter-btn" id="rot-cat-filter-btn">
+            <span class="material-symbols-rounded">filter_list</span>
+            Filtrar categoria
+            <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
+          </button>
+          <div class="filter-dropdown-menu" id="rot-cat-filter-menu">
+            <div class="filter-option active" data-rot-cat="all">Todas</div>
+            ${categoriasDisciplina.map(c => `
+              <div class="filter-option" data-rot-cat="${c}">${c}</div>
+            `).join("")}
+          </div>
+        </div>
+
+        <button class="export-btn-outline" id="roteiros-export-btn">
+          <span class="material-symbols-rounded">download</span>
+          Exportar
+        </button>
+      </div>
+
+      <div id="roteiros-table-container">
+        ${buildRoteirosTable(localRoteiros || [])}
+      </div>
+
+      ${buildCriarRoteiroModal()}
+      ${buildViewRoteiroModal()}
+    </div>
+  `;
+
+  bindRoteirosEvents();
+}
+
+function buildViewRoteiroModal() {
+  return `
+    <div class="modal-overlay" id="view-roteiro-modal">
+      <div class="modal-card modal-card-wide">
+        <div class="modal-header">
+          <span class="modal-title">Detalhes do Roteiro</span>
+          <button class="modal-close" id="view-roteiro-close">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Nome</label>
+              <div class="view-field-value" id="view-rot-titulo"></div>
+            </div>
+            <div class="modal-field">
+              <label>Categoria</label>
+              <div class="view-field-value" id="view-rot-categoria"></div>
+            </div>
+          </div>
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Duração</label>
+              <div class="view-field-value" id="view-rot-duracao"></div>
+            </div>
+            <div class="modal-field">
+              <label>Turma</label>
+              <div class="view-field-value" id="view-rot-turma"></div>
+            </div>
+          </div>
+          <div class="modal-field">
+            <label>Observações</label>
+            <div class="view-field-value" id="view-rot-obs"></div>
+          </div>
+          <div class="modal-field">
+            <label>Materiais</label>
+            <div class="view-field-value" id="view-rot-materiais"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-modal-cancel" id="view-roteiro-close-btn">Fechar</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildRoteirosTable(roteiros) {
+  const isAuxiliar = currentUser.profile === "auxiliar";
+
+  const rows = roteiros.length === 0
+    ? `<tr class="table-empty-row"><td colspan="6">Nenhum roteiro encontrado.</td></tr>`
+    : roteiros.map(r => `
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="material-symbols-rounded" style="font-size:17px;color:var(--purple)">list_alt</span>
+              ${r.titulo}
+            </div>
+          </td>
+          <td>${r.categoria}</td>
+          <td>${formatDuracao(r.duracao)}</td>
+          <td>${r.turma || `<span style="color:var(--muted)">—</span>`}</td>
+          <td>${(r.materiais || []).length} item(ns)</td>
+          <td>
+            <div class="action-cell">
+              <button class="action-icon-btn" title="Visualizar" data-view-roteiro-id="${r.id}">
+                <span class="material-symbols-rounded">visibility</span>
+              </button>
+              <button class="action-icon-btn" title="Editar" data-edit-roteiro-id="${r.id}">
+                <span class="material-symbols-rounded">edit</span>
+              </button>
+              <button class="action-icon-btn delete" title="Excluir" data-delete-roteiro-id="${r.id}">
+                <span class="material-symbols-rounded">delete</span>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join("");
+
+  return `
+    <div class="list-card">
+      <div class="list-card-header">
+        <span class="list-card-title">Lista de Roteiros</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          ${resultBadge(roteiros.length)}
+          ${isAuxiliar ? btnCreate({ id: "new-roteiro-btn", label: "Criar Roteiro" }) : ""}
+        </div>
+      </div>
+      <div class="list-card-inner">
+        <div class="table-wrap">
+          <table class="produtos-table tbl-roteiros">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Categoria</th>
+                <th>Duração</th>
+                <th>Turma</th>
+                <th>Materiais</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildCriarRoteiroModal() {
+  const categoriasDisciplina = ["Química", "Física", "Biologia", "Ciências", "Outros"];
+  return `
+    <div class="modal-overlay" id="criar-roteiro-modal">
+      <div class="modal-card modal-card-wide">
+        <div class="modal-header">
+          <span class="modal-title" id="roteiro-modal-title">Criar Roteiro</span>
+          <button class="modal-close" id="roteiro-modal-close">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Nome <span class="required-star">*</span></label>
+              <input type="text" id="rot-nome" placeholder="Ex: Titulação Ácido-Base">
+            </div>
+            <div class="modal-field">
+              <label>Categoria <span class="required-star">*</span></label>
+              <select id="rot-categoria">
+                <option value="">Selecione...</option>
+                ${categoriasDisciplina.map(c => `<option value="${c}">${c}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Duração <span class="required-star">*</span></label>
+              <div class="duracao-wrap">
+                <select id="rot-horas" class="modal-input-sm">
+                  <option value="" disabled selected>—</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                </select>
+                <span class="duracao-sep">h</span>
+                <select id="rot-minutos" class="modal-input-sm">
+                  <option value="0">00</option>
+                  <option value="30">30</option>
+                </select>
+                <span class="duracao-sep">min</span>
+              </div>
+            </div>
+            <div class="modal-field">
+              <label>Turma</label>
+              <input type="text" id="rot-turma" placeholder="Ex: Química 2A">
+            </div>
+          </div>
+
+          <div class="modal-field">
+            <label>Observação</label>
+            <textarea id="rot-obs" placeholder="Informações adicionais sobre o roteiro..." rows="3"></textarea>
+          </div>
+
+          <div class="materiais-section">
+            <div class="materiais-hdr">
+              <span class="materiais-label">Materiais necessários</span>
+              <button class="add-mat-btn" id="rot-add-mat-btn">
+                <span class="material-symbols-rounded">add</span>
+                Adicionar
+              </button>
+            </div>
+            <div class="materiais-list" id="rot-materiais-list">
+              <div class="materiais-empty-hint">Clique em Adicionar para incluir materiais.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          ${btnModalCancel({ id: "roteiro-modal-cancel" })}
+          ${btnModalConfirm({ id: "roteiro-modal-save", label: "Salvar Roteiro" })}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function refreshRoteirosTable() {
+  const q = roteirosFilter.search.toLowerCase();
+  const filtered = (localRoteiros || []).filter(r => {
+    const matchSearch = !q || r.titulo.toLowerCase().includes(q) || r.categoria.toLowerCase().includes(q);
+    const matchCat = roteirosFilter.categoria === "all" || r.categoria === roteirosFilter.categoria;
+    return matchSearch && matchCat;
+  });
+  const container = document.getElementById("roteiros-table-container");
+  if (container) {
+    container.innerHTML = buildRoteirosTable(filtered);
+    bindRoteirosTableButtons();
+  }
+}
+
+function collectRoteirosMateriaisRows() {
+  const list = document.getElementById("rot-materiais-list");
+  if (!list) return [];
+  const materiais = [];
+  list.querySelectorAll(".material-row").forEach(row => {
+    const select = row.querySelector(".mat-select");
+    const qtyInput = row.querySelector(".mat-qty-input");
+    const nomeEl = row.querySelector(".mat-nome");
+    if (select && select.value) {
+      materiais.push({ produtoId: select.value, qty: qtyInput?.value || "" });
+    } else if (nomeEl) {
+      const produtoId = row.dataset.produtoId;
+      const qty = row.querySelector(".mat-qty")?.textContent?.trim() || "";
+      if (produtoId) materiais.push({ produtoId, qty });
+    }
+  });
+  return materiais;
+}
+
+function resetRoteiroModal() {
+  currentEditRoteiroId = null;
+  ["rot-nome", "rot-turma", "rot-obs"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ""; el.classList.remove("field-error"); }
+  });
+  const horasEl = document.getElementById("rot-horas");
+  if (horasEl) { horasEl.selectedIndex = 0; horasEl.classList.remove("field-error"); }
+  const minutosEl = document.getElementById("rot-minutos");
+  if (minutosEl) { minutosEl.value = "0"; minutosEl.classList.remove("field-error"); }
+  const cat = document.getElementById("rot-categoria");
+  if (cat) { cat.value = ""; cat.classList.remove("field-error"); }
+  const list = document.getElementById("rot-materiais-list");
+  if (list) list.innerHTML = `<div class="materiais-empty-hint">Clique em Adicionar para incluir materiais.</div>`;
+  document.getElementById("roteiro-modal-title").textContent = "Criar Roteiro";
+  document.getElementById("roteiro-modal-save").innerHTML =
+    `<span class="material-symbols-rounded">check</span> Salvar Roteiro`;
+}
+
+function bindRoteirosTableButtons() {
+  document.querySelectorAll("[data-view-roteiro-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const r = (localRoteiros || []).find(x => x.id === btn.dataset.viewRoteiroId);
+      if (!r) return;
+      document.getElementById("view-rot-titulo").textContent    = r.titulo;
+      document.getElementById("view-rot-categoria").textContent = r.categoria;
+      document.getElementById("view-rot-duracao").textContent   = formatDuracao(r.duracao);
+      document.getElementById("view-rot-turma").textContent     = r.turma || "—";
+      document.getElementById("view-rot-obs").textContent       = r.observacao || "—";
+      const mats = r.materiais || [];
+      document.getElementById("view-rot-materiais").innerHTML = mats.length === 0
+        ? `<span style="color:var(--muted)">Nenhum material cadastrado</span>`
+        : mats.map(m => `<div style="padding:2px 0">${m.nome || m.produto || m.id}</div>`).join("");
+      document.getElementById("view-roteiro-modal").classList.add("open");
+    });
+  });
+
+  const closeView = () => document.getElementById("view-roteiro-modal")?.classList.remove("open");
+  document.getElementById("view-roteiro-close")?.addEventListener("click", closeView);
+  document.getElementById("view-roteiro-close-btn")?.addEventListener("click", closeView);
+  document.getElementById("view-roteiro-modal")?.addEventListener("click", e => {
+    if (e.target === e.currentTarget) closeView();
+  });
+
+  document.querySelectorAll("[data-delete-roteiro-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!confirm("Tem certeza que deseja excluir este roteiro? Esta ação não poderá ser desfeita.")) return;
+      localRoteiros = (localRoteiros || []).filter(r => r.id !== btn.dataset.deleteRoteiroId);
+      refreshRoteirosTable();
+      showToast("Roteiro excluído com sucesso.");
+    });
+  });
+
+  document.querySelectorAll("[data-edit-roteiro-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const roteiro = (localRoteiros || []).find(r => r.id === btn.dataset.editRoteiroId);
+      if (!roteiro) return;
+
+      currentEditRoteiroId = roteiro.id;
+      document.getElementById("rot-nome").value         = roteiro.titulo;
+      document.getElementById("rot-categoria").value    = roteiro.categoria;
+      document.getElementById("rot-horas").value        = roteiro.duracao?.horas ?? 1;
+      document.getElementById("rot-minutos").value      = roteiro.duracao?.minutos ?? 0;
+      document.getElementById("rot-turma").value        = roteiro.turma || "";
+      document.getElementById("rot-obs").value          = roteiro.observacao || "";
+
+      const list = document.getElementById("rot-materiais-list");
+      if (list) list.innerHTML = "";
+      (roteiro.materiais || []).forEach(m => addMaterialRow(m.produtoId, m.qty, "rot-materiais-list", false));
+      if ((roteiro.materiais || []).length === 0 && list) {
+        list.innerHTML = `<div class="materiais-empty-hint">Clique em Adicionar para incluir materiais.</div>`;
+      }
+
+      document.getElementById("roteiro-modal-title").textContent = "Editar Roteiro";
+      document.getElementById("roteiro-modal-save").innerHTML =
+        `<span class="material-symbols-rounded">check</span> Salvar Alterações`;
+
+      document.getElementById("criar-roteiro-modal")?.classList.add("open");
+    });
+  });
+
+  document.getElementById("new-roteiro-btn")?.addEventListener("click", () => {
+    resetRoteiroModal();
+    document.getElementById("criar-roteiro-modal")?.classList.add("open");
+  });
+}
+
+function bindRoteirosEvents() {
+  document.getElementById("roteiros-search")?.addEventListener("input", e => {
+    roteirosFilter.search = e.target.value;
+    refreshRoteirosTable();
+  });
+
+  document.getElementById("roteiros-export-btn")?.addEventListener("click", () => {
+    const headers = ["Nome", "Categoria", "Duração", "Turma", "Observação", "Qtd. Materiais"];
+    const q = roteirosFilter.search.toLowerCase();
+    const filtered = (localRoteiros || []).filter(r => {
+      const matchSearch = !q || r.titulo.toLowerCase().includes(q) || r.categoria.toLowerCase().includes(q);
+      const matchCat = roteirosFilter.categoria === "all" || r.categoria === roteirosFilter.categoria;
+      return matchSearch && matchCat;
+    });
+    const rows = filtered.map(r => [
+      r.titulo, r.categoria, formatDuracao(r.duracao),
+      r.turma || "", r.observacao || "", (r.materiais || []).length
+    ]);
+    exportCSV("roteiros.csv", headers, rows);
+  });
+
+  const rotCatBtn  = document.getElementById("rot-cat-filter-btn");
+  const rotCatMenu = document.getElementById("rot-cat-filter-menu");
+
+  rotCatBtn?.addEventListener("click", e => {
+    e.stopPropagation();
+    rotCatMenu.classList.toggle("open");
+  });
+
+  rotCatMenu?.querySelectorAll(".filter-option").forEach(opt => {
+    opt.addEventListener("click", e => {
+      e.stopPropagation();
+      roteirosFilter.categoria = opt.dataset.rotCat;
+      rotCatMenu.classList.remove("open");
+      rotCatBtn.classList.toggle("active-filter", roteirosFilter.categoria !== "all");
+      rotCatMenu.querySelectorAll(".filter-option").forEach(o =>
+        o.classList.toggle("active", o.dataset.rotCat === roteirosFilter.categoria)
+      );
+      refreshRoteirosTable();
+    });
+  });
+
+  document.addEventListener("click", () => rotCatMenu?.classList.remove("open"));
+
+  bindRoteirosTableButtons();
+
+  const openModal = () => {
+    resetRoteiroModal();
+    document.getElementById("criar-roteiro-modal")?.classList.add("open");
+  };
+  const closeModal = () => {
+    document.getElementById("criar-roteiro-modal")?.classList.remove("open");
+    resetRoteiroModal();
+  };
+
+  document.getElementById("roteiro-modal-close")?.addEventListener("click", closeModal);
+  document.getElementById("roteiro-modal-cancel")?.addEventListener("click", closeModal);
+  document.getElementById("criar-roteiro-modal")?.addEventListener("click", e => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+
+  document.getElementById("rot-add-mat-btn")?.addEventListener("click", () => {
+    addMaterialRow("", "", "rot-materiais-list", false);
+  });
+
+  document.getElementById("roteiro-modal-save")?.addEventListener("click", () => {
+    const nomeEl     = document.getElementById("rot-nome");
+    const catEl      = document.getElementById("rot-categoria");
+    const horasEl    = document.getElementById("rot-horas");
+    const minutosEl  = document.getElementById("rot-minutos");
+
+    [nomeEl, catEl, horasEl].forEach(el => el?.classList.remove("field-error"));
+
+    let valid = true;
+    if (!nomeEl?.value.trim())    { nomeEl.classList.add("field-error");  valid = false; }
+    if (!catEl?.value)            { catEl.classList.add("field-error");   valid = false; }
+    const horas = parseInt(horasEl?.value, 10);
+    if (!horasEl?.value || isNaN(horas) || horas < 1) {
+      horasEl?.classList.add("field-error"); valid = false;
+    }
+    if (!valid) return;
+
+    const minutos = parseInt(minutosEl?.value, 10) || 0;
+    const materiais = collectRoteirosMateriaisRows();
+
+    if (currentEditRoteiroId) {
+      const idx = (localRoteiros || []).findIndex(r => r.id === currentEditRoteiroId);
+      if (idx !== -1) {
+        localRoteiros[idx] = {
+          ...localRoteiros[idx],
+          titulo:     nomeEl.value.trim(),
+          categoria:  catEl.value,
+          duracao:    { horas, minutos },
+          turma:      document.getElementById("rot-turma")?.value.trim() || "",
+          observacao: document.getElementById("rot-obs")?.value.trim() || "",
+          materiais,
+        };
+      }
+    } else {
+      localRoteiros = localRoteiros || [];
+      localRoteiros.push({
+        id:         String(Date.now()),
+        titulo:     nomeEl.value.trim(),
+        categoria:  catEl.value,
+        duracao:    { horas, minutos },
+        turma:      document.getElementById("rot-turma")?.value.trim() || "",
+        observacao: document.getElementById("rot-obs")?.value.trim() || "",
+        materiais,
+      });
+    }
+
+    closeModal();
+    refreshRoteirosTable();
+  });
+}
+
 /* ===== Meus Agendamentos ===== */
 
 const CAL_START = 7;
@@ -953,6 +2083,7 @@ function renderMeusAgendamentos() {
       <p class="page-section-sub">Visualize a disponibilidade dos laboratórios e crie agendamentos com roteiro de materiais.</p>
       <div id="calendar-container">${buildCalendarSection()}</div>
       ${buildCriarAgendamentoModal()}
+      ${buildVisualizarAgendamentoModal()}
     </div>
   `;
   bindCalendarEvents();
@@ -1018,7 +2149,7 @@ function buildCalendarSection() {
         ? `<span class="material-symbols-rounded cal-evt-icon">schedule</span>`
         : "";
       return `
-        <div class="cal-event cal-event-${colorClass}" style="top:${top}px;height:${height}px;">
+        <div class="cal-event cal-event-${colorClass}" data-agend-id="${evt.id}" style="top:${top}px;height:${height}px;cursor:pointer">
           <div class="cal-evt-hdr">
             <span class="cal-evt-time">${evt.horaInicio} - ${evt.horaFim}</span>
             ${icon}
@@ -1045,10 +2176,10 @@ function buildCalendarSection() {
           <button class="cal-nav-btn" id="cal-next"><span class="material-symbols-rounded">chevron_right</span></button>
           <span class="cal-range">${formatWeekRange(days)}</span>
         </div>
-        <button class="new-item-btn" id="cal-create-btn">
-          <span class="material-symbols-rounded">add</span>
-          Criar Agendamento
-        </button>
+        <div style="display:flex;align-items:center;gap:12px">
+          ${resultBadge(agendamentos.length, "agendamento(s)")}
+          ${btnCreate({ id: "cal-create-btn", label: "Criar Agendamento" })}
+        </div>
       </div>
 
       <div class="cal-header-row">
@@ -1068,7 +2199,7 @@ function buildCalendarSection() {
 }
 
 function buildCriarAgendamentoModal() {
-  const roteiros = ["Titulação Ácido-Base", "Destilação Simples", "Eletroquímica Básica", "Síntese Orgânica I"];
+  const roteiros = localRoteiros || [];
   return `
     <div class="modal-overlay" id="criar-agend-modal">
       <div class="modal-card modal-card-wide">
@@ -1087,20 +2218,6 @@ function buildCriarAgendamentoModal() {
 
           <div class="modal-row">
             <div class="modal-field">
-              <label>Roteiro</label>
-              <select id="agend-roteiro">
-                <option value="">Selecione...</option>
-                ${roteiros.map(r => `<option value="${r}">${r}</option>`).join("")}
-              </select>
-            </div>
-            <div class="modal-field">
-              <label>Turma</label>
-              <input type="text" id="agend-turma" placeholder="Ex: Química 2A">
-            </div>
-          </div>
-
-          <div class="modal-row">
-            <div class="modal-field">
               <label>Data <span class="required-star">*</span></label>
               <input type="date" id="agend-data">
             </div>
@@ -1111,6 +2228,20 @@ function buildCriarAgendamentoModal() {
                 <span class="time-sep">–</span>
                 <input type="time" id="agend-fim" value="12:00">
               </div>
+            </div>
+          </div>
+
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Roteiro</label>
+              <select id="agend-roteiro">
+                <option value="">Selecione...</option>
+                ${roteiros.map(r => `<option value="${r.titulo}">${r.titulo}</option>`).join("")}
+              </select>
+            </div>
+            <div class="modal-field">
+              <label>Turma</label>
+              <input type="text" id="agend-turma" placeholder="Ex: Química 2A">
             </div>
           </div>
 
@@ -1140,10 +2271,88 @@ function buildCriarAgendamentoModal() {
         </div>
 
         <div class="modal-footer">
-          <button class="btn-modal-cancel" id="agend-modal-cancel">Cancelar</button>
+          ${btnModalCancel({ id: "agend-modal-cancel" })}
           <div class="agend-footer-actions">
-            <button class="btn-enviar-analise">Enviar para análise</button>
-            <button class="btn-modal-green">Confirmar agendamento</button>
+            <button class="btn-enviar-analise" id="btn-enviar-analise" style="display:none">Enviar para análise</button>
+            ${btnModalConfirm({ id: "agend-confirm-btn", label: "Confirmar agendamento" })}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildVisualizarAgendamentoModal() {
+  const roteiros = localRoteiros || [];
+  return `
+    <div class="modal-overlay" id="view-agend-modal">
+      <div class="modal-card modal-card-wide" id="view-agend-card">
+        <div class="modal-header">
+          <span class="modal-title" id="view-modal-title">Visualizar Agendamento</span>
+          <button class="modal-close" id="view-agend-modal-close">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="modal-field">
+            <label>Nome <span class="required-star">*</span></label>
+            <input type="text" id="view-agend-nome" placeholder="Ex: Titulação Ácido-Base">
+          </div>
+
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Data <span class="required-star">*</span></label>
+              <input type="date" id="view-agend-data">
+            </div>
+            <div class="modal-field">
+              <label>Horário <span class="required-star">*</span></label>
+              <div class="time-range-wrap">
+                <input type="time" id="view-agend-inicio">
+                <span class="time-sep">–</span>
+                <input type="time" id="view-agend-fim">
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Roteiro</label>
+              <select id="view-agend-roteiro">
+                <option value="">Selecione...</option>
+                ${roteiros.map(r => `<option value="${r.titulo}">${r.titulo}</option>`).join("")}
+              </select>
+            </div>
+            <div class="modal-field">
+              <label>Turma</label>
+              <input type="text" id="view-agend-turma" placeholder="Ex: Química 2A">
+            </div>
+          </div>
+
+          <div class="modal-field">
+            <label>Observações</label>
+            <textarea id="view-agend-obs" placeholder="Informações adicionais sobre o agendamento..." rows="3"></textarea>
+          </div>
+
+          <div class="materiais-section">
+            <div class="materiais-hdr">
+              <span class="materiais-label">Materiais necessários</span>
+              <button class="add-mat-btn" id="view-add-mat-btn">
+                <span class="material-symbols-rounded">add</span>
+                Adicionar
+              </button>
+            </div>
+            <div class="materiais-list" id="view-agend-materiais-list">
+              <div class="materiais-empty-hint">Nenhum material registrado.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="justify-content:space-between">
+          ${btnModalDanger({ id: "view-cancel-agend-btn", label: "Cancelar Agendamento" })}
+          <div class="agend-footer-actions">
+            ${btnModalCancel({ id: "view-close-btn", label: "Fechar" })}
+            ${btnModalConfirm({ id: "view-save-btn", label: "Salvar Alterações" })}
           </div>
         </div>
       </div>
@@ -1156,6 +2365,7 @@ function refreshCalendar() {
   if (container) {
     container.innerHTML = buildCalendarSection();
     bindCalendarNavEvents();
+    bindCalEventClicks();
   }
 }
 
@@ -1190,7 +2400,70 @@ function bindCalendarEvents() {
     populateMateriaisFromRoteiro(e.target.value);
   });
 
-  document.querySelector(".btn-modal-green")?.addEventListener("click", () => {
+  // View/Edit modal
+  const closeViewModal = () => document.getElementById("view-agend-modal")?.classList.remove("open");
+  document.getElementById("view-agend-modal-close")?.addEventListener("click", closeViewModal);
+  document.getElementById("view-close-btn")?.addEventListener("click", closeViewModal);
+  document.getElementById("view-agend-modal")?.addEventListener("click", e => {
+    if (e.target === e.currentTarget) closeViewModal();
+  });
+
+  document.getElementById("view-add-mat-btn")?.addEventListener("click", () => {
+    addMaterialRow("", "", "view-agend-materiais-list");
+  });
+
+  document.getElementById("view-agend-roteiro")?.addEventListener("change", e => {
+    populateMateriaisFromRoteiro(e.target.value, "view-agend-materiais-list");
+  });
+
+  document.getElementById("view-cancel-agend-btn")?.addEventListener("click", () => {
+    const card = document.getElementById("view-agend-card");
+    const isPendente = card?.dataset.mode === "edit";
+    const msg = isPendente
+      ? "Este agendamento ainda está pendente e pode ser editado. Deseja cancelar o agendamento?"
+      : "Este agendamento já foi preparado pela equipe auxiliar. Deseja realmente cancelá-lo?";
+    if (confirm(msg)) {
+      const id = card?.dataset.agendId;
+      appData.agendamentos = appData.agendamentos.filter(a => a.id !== id);
+      closeViewModal();
+      refreshCalendar();
+    }
+  });
+
+  document.getElementById("view-save-btn")?.addEventListener("click", () => {
+    const card = document.getElementById("view-agend-card");
+    const id = card?.dataset.agendId;
+    const agend = appData.agendamentos.find(a => a.id === id);
+    if (!agend) return;
+
+    const nomeEl   = document.getElementById("view-agend-nome");
+    const dataEl   = document.getElementById("view-agend-data");
+    const inicioEl = document.getElementById("view-agend-inicio");
+    const fimEl    = document.getElementById("view-agend-fim");
+
+    const required = [nomeEl, dataEl, inicioEl, fimEl];
+    required.forEach(el => el?.classList.remove("field-error"));
+    let valid = true;
+    required.forEach(el => {
+      if (!el?.value?.trim()) { el.classList.add("field-error"); valid = false; }
+    });
+    if (!valid) return;
+
+    agend.titulo      = nomeEl.value.trim();
+    agend.data        = dataEl.value;
+    agend.horaInicio  = inicioEl.value;
+    agend.horaFim     = fimEl.value;
+    agend.roteiro     = document.getElementById("view-agend-roteiro")?.value || "";
+    agend.turma       = document.getElementById("view-agend-turma")?.value.trim() || "";
+    agend.observacoes = document.getElementById("view-agend-obs")?.value.trim() || "";
+
+    closeViewModal();
+    refreshCalendar();
+  });
+
+  bindCalEventClicks();
+
+  document.getElementById("agend-confirm-btn")?.addEventListener("click", () => {
     const nomeEl   = document.getElementById("agend-nome");
     const dataEl   = document.getElementById("agend-data");
     const inicioEl = document.getElementById("agend-inicio");
@@ -1242,14 +2515,24 @@ function resetAgendamentoModal() {
   if (list) list.innerHTML = `<div class="materiais-empty-hint">Selecione um roteiro ou clique em Adicionar para incluir materiais.</div>`;
   const alertBox = document.getElementById("material-alert-box");
   if (alertBox) alertBox.style.display = "none";
+  const enviarBtn = document.getElementById("btn-enviar-analise");
+  if (enviarBtn) enviarBtn.style.display = "none";
+}
+
+function checkEnviarAnaliseBtnVisibility() {
+  const list = document.getElementById("agend-materiais-list");
+  const btn = document.getElementById("btn-enviar-analise");
+  if (!btn) return;
+  const hasUnavailable = !!list?.querySelector(".mat-status.em-falta");
+  btn.style.display = hasUnavailable ? "" : "none";
 }
 
 function getDisplayProdutos() {
   return localProdutos || [];
 }
 
-function addMaterialRow(produtoId = "", qty = "") {
-  const list = document.getElementById("agend-materiais-list");
+function addMaterialRow(produtoId = "", qty = "", listId = "agend-materiais-list", showStatus = true) {
+  const list = document.getElementById(listId);
   if (!list) return;
   const hint = list.querySelector(".materiais-empty-hint");
   if (hint) hint.remove();
@@ -1267,6 +2550,7 @@ function addMaterialRow(produtoId = "", qty = "") {
     if (list.children.length === 0) {
       list.innerHTML = `<div class="materiais-empty-hint">Selecione um roteiro ou clique em Adicionar para incluir materiais.</div>`;
     }
+    checkEnviarAnaliseBtnVisibility();
   };
 
   const enterDisplayMode = (selId, qtyVal) => {
@@ -1280,13 +2564,15 @@ function addMaterialRow(produtoId = "", qty = "") {
     };
     const [cls, icon, label] = statusMap[p.status] || ["", "help", ""];
     row.style.cursor = "pointer";
+    row.dataset.produtoId = selId;
     row.innerHTML = `
       <span class="mat-nome">${p.nome}</span>
       <span class="mat-qty">${qtyVal || p.quantidade}</span>
-      <span class="mat-status ${cls}">
-        <span class="material-symbols-rounded">${icon}</span>
-        ${label}
-      </span>
+      ${showStatus ? `
+        <span class="mat-status ${cls}">
+          <span class="material-symbols-rounded">${icon}</span>
+          ${label}
+        </span>` : ""}
       <button class="mat-remove-btn" title="Remover">
         <span class="material-symbols-rounded">close</span>
       </button>
@@ -1296,6 +2582,7 @@ function addMaterialRow(produtoId = "", qty = "") {
     row.addEventListener("click", e => {
       if (!e.target.closest(".mat-remove-btn")) enterEditMode(selId, qtyVal || p.quantidade);
     }, { signal: abortCtrl.signal, once: true });
+    checkEnviarAnaliseBtnVisibility();
   };
 
   const enterEditMode = (selId, qtyVal) => {
@@ -1337,34 +2624,112 @@ function addMaterialRow(produtoId = "", qty = "") {
   }
 }
 
-function populateMateriaisFromRoteiro(roteiro) {
-  const list = document.getElementById("agend-materiais-list");
+function populateMateriaisFromRoteiro(roteiro, listId = "agend-materiais-list") {
+  const list = document.getElementById(listId);
   if (!list) return;
   list.innerHTML = "";
   if (!roteiro) {
     list.innerHTML = `<div class="materiais-empty-hint">Selecione um roteiro ou clique em Adicionar para incluir materiais.</div>`;
     return;
   }
-  const roteiroMateriais = {
-    "Titulação Ácido-Base": [
-      { id: "1", qty: "200 ml" },
-      { id: "2", qty: "50 g" },
-      { id: "4", qty: "2 unid." },
-    ],
-    "Destilação Simples": [
-      { id: "4", qty: "1 unid." },
-    ],
-    "Eletroquímica Básica": [
-      { id: "3", qty: "100 g" },
-      { id: "5", qty: "1 caixa" },
-    ],
-    "Síntese Orgânica I": [
-      { id: "1", qty: "100 ml" },
-      { id: "2", qty: "30 g" },
-    ],
-  };
-  const materiais = roteiroMateriais[roteiro] || [];
-  materiais.forEach(m => addMaterialRow(m.id, m.qty));
+  const roteiroObj = (localRoteiros || []).find(r => r.titulo === roteiro);
+  const materiais = roteiroObj?.materiais || [];
+  if (materiais.length === 0) {
+    list.innerHTML = `<div class="materiais-empty-hint">Este roteiro não possui materiais cadastrados.</div>`;
+    return;
+  }
+  materiais.forEach(m => addMaterialRow(m.produtoId, m.qty, listId));
+}
+
+function populateViewMateriais(roteiro, readonly) {
+  const listId = "view-agend-materiais-list";
+  if (!readonly) {
+    populateMateriaisFromRoteiro(roteiro, listId);
+    return;
+  }
+  const list = document.getElementById(listId);
+  if (!list) return;
+  list.innerHTML = "";
+  if (!roteiro) {
+    list.innerHTML = `<div class="materiais-empty-hint">Nenhum roteiro selecionado.</div>`;
+    return;
+  }
+  const roteiroObj = (localRoteiros || []).find(r => r.titulo === roteiro);
+  const materiais = roteiroObj?.materiais || [];
+  if (materiais.length === 0) {
+    list.innerHTML = `<div class="materiais-empty-hint">Nenhum material para este roteiro.</div>`;
+    return;
+  }
+  const produtos = getDisplayProdutos();
+  materiais.forEach(m => {
+    const p = produtos.find(x => x.id === m.produtoId);
+    if (!p) return;
+    const statusMap = {
+      normal:          ["ok",       "check",   "ok"],
+      "estoque-baixo": ["em-falta", "warning", "Em falta"],
+      vencido:         ["em-falta", "warning", "Vencido"],
+    };
+    const [cls, icon, label] = statusMap[p.status] || ["", "help", p.status || ""];
+    const row = document.createElement("div");
+    row.className = "material-row";
+    row.innerHTML = `
+      <span class="mat-nome">${p.nome}</span>
+      <span class="mat-qty">${m.qty || p.quantidade}</span>
+      <span class="mat-status ${cls}">
+        <span class="material-symbols-rounded">${icon}</span>
+        ${label}
+      </span>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function openVisualizarModal(id) {
+  const agend = appData.agendamentos.find(a => a.id === id);
+  if (!agend) return;
+
+  const isPendente = agend.status === "pendente";
+  const card = document.getElementById("view-agend-card");
+  if (card) {
+    card.dataset.agendId = id;
+    card.dataset.mode = isPendente ? "edit" : "view";
+  }
+
+  document.getElementById("view-modal-title").textContent =
+    isPendente ? "Editar Agendamento" : "Visualizar Agendamento";
+
+  const setVal = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val ?? ""; };
+  setVal("view-agend-nome",    agend.titulo);
+  setVal("view-agend-data",    agend.data);
+  setVal("view-agend-inicio",  agend.horaInicio);
+  setVal("view-agend-fim",     agend.horaFim);
+  setVal("view-agend-roteiro", agend.roteiro     || "");
+  setVal("view-agend-turma",   agend.turma       || "");
+  setVal("view-agend-obs",     agend.observacoes || "");
+
+  ["view-agend-nome", "view-agend-data", "view-agend-inicio", "view-agend-fim",
+   "view-agend-turma", "view-agend-obs"].forEach(fid => {
+    const el = document.getElementById(fid);
+    if (el) el.readOnly = !isPendente;
+  });
+  const roteiroEl = document.getElementById("view-agend-roteiro");
+  if (roteiroEl) roteiroEl.disabled = !isPendente;
+
+  const addMatBtn = document.getElementById("view-add-mat-btn");
+  if (addMatBtn) addMatBtn.style.display = isPendente ? "" : "none";
+
+  populateViewMateriais(agend.roteiro || "", !isPendente);
+
+  document.getElementById("view-close-btn").style.display = isPendente ? "none" : "";
+  document.getElementById("view-save-btn").style.display   = isPendente ? "" : "none";
+
+  document.getElementById("view-agend-modal")?.classList.add("open");
+}
+
+function bindCalEventClicks() {
+  document.querySelectorAll(".cal-event[data-agend-id]").forEach(el => {
+    el.addEventListener("click", () => openVisualizarModal(el.dataset.agendId));
+  });
 }
 
 function renderCategorias() {
@@ -1379,10 +2744,7 @@ function renderCategorias() {
           <input type="text" id="categorias-search" placeholder="Buscar categoria...">
         </label>
         ${isAuxiliar ? `
-          <button class="new-item-btn" id="new-categoria-btn">
-            <span class="material-symbols-rounded">add</span>
-            Nova Categoria
-          </button>
+          ${btnCreate({ id: "new-categoria-btn", label: "Nova Categoria" })}
         ` : ""}
       </div>
 
@@ -1434,7 +2796,7 @@ function buildCategoriasTable(categorias, isAuxiliar) {
     <div class="list-card">
       <div class="list-card-header">
         <span class="list-card-title">Categorias de Produtos</span>
-        <span class="result-badge">${categorias.length} resultado(s)</span>
+        ${resultBadge(categorias.length)}
       </div>
       <div class="list-card-inner">
         <div class="table-wrap">
@@ -1608,17 +2970,48 @@ function formatPageName(page) {
 }
 
 const AVATAR_OPTIONS = [
-  "👩‍🔬","👨‍🔬","🧑‍🏫","👩‍🏫","👨‍🏫","👩‍💻","👨‍💻",
-  "🧪","🔬","📚","🏫","🧑","👩","👨",
+  // Pessoas (neutro)
+  "🧑", "🧑🏻", "🧑🏼", "🧑🏽", "🧑🏾", 
+
+  // Mulheres
+  "👩", "👩🏻", "👩🏼", "👩🏽", "👩🏾", 
+
+  // Homens
+  "👨", "👨🏻", "👨🏼", "👨🏽", "👨🏾", 
+
+  // Profissões / estudo / tecnologia
+  "🧑‍🏫", "👩‍🏫", "👨‍🏫",
+  "🧑‍🔬", "👩‍🔬", "👨‍🔬",
+  "🧑‍💻", "👩‍💻", "👨‍💻",
+  "🧑‍🎓", "👩‍🎓", "👨‍🎓",
+
+  // Ícones simbólicos 
+  "🧠", "📚", "🧪", "🔬", "💡", "🚀", "🏫", "💻"
+];
+
+
+const AVATAR_COLOR_OPTIONS = [
+  { id: "blue",   gradient: "linear-gradient(135deg,#ede8ff,#d1e8ff)" },
+  { id: "green",  gradient: "linear-gradient(135deg,#e2f5e8,#c8edda)" },
+  { id: "orange", gradient: "linear-gradient(135deg,#fff0e2,#ffddb2)" },
+  { id: "pink",   gradient: "linear-gradient(135deg,#ffe8f4,#ffc5e0)" },
+  { id: "teal",   gradient: "linear-gradient(135deg,#e2f5f3,#b2e8e0)" },
 ];
 
 function renderMeuPerfil() {
   let selectedAvatar = currentUser.avatar || AVATAR_OPTIONS[0];
+  let selectedColor  = currentUser.avatarColor || AVATAR_COLOR_OPTIONS[0].gradient;
 
   const avatarGrid = AVATAR_OPTIONS.map(emoji => `
     <button class="avatar-option ${emoji === selectedAvatar ? "selected" : ""}" data-avatar="${emoji}">
       ${emoji}
     </button>
+  `).join("");
+
+  const colorPicker = AVATAR_COLOR_OPTIONS.map(c => `
+    <button class="avatar-color-option ${c.gradient === selectedColor ? "selected" : ""}"
+            data-gradient="${c.gradient}"
+            style="background:${c.gradient}"></button>
   `).join("");
 
   document.getElementById("main-content").innerHTML = `
@@ -1630,8 +3023,14 @@ function renderMeuPerfil() {
           Ícone do perfil
         </h3>
         <div class="perfil-avatar-row">
-          <div class="avatar-circle avatar-preview" id="perfil-avatar-preview">${selectedAvatar}</div>
-          <div class="avatar-grid" id="avatar-grid">${avatarGrid}</div>
+          <div class="avatar-circle avatar-preview" id="perfil-avatar-preview" style="background:${selectedColor}">${selectedAvatar}</div>
+          <div class="avatar-right-col">
+            <div class="avatar-grid" id="avatar-grid">${avatarGrid}</div>
+            <div class="avatar-color-picker" id="avatar-color-picker">
+              <span class="avatar-color-label">Cor do fundo</span>
+              ${colorPicker}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1705,6 +3104,7 @@ function renderMeuPerfil() {
 
 function bindPerfilEvents() {
   let selectedAvatar = currentUser.avatar || AVATAR_OPTIONS[0];
+  let selectedColor  = currentUser.avatarColor || AVATAR_COLOR_OPTIONS[0].gradient;
 
   document.getElementById("avatar-grid")?.addEventListener("click", e => {
     const btn = e.target.closest(".avatar-option");
@@ -1713,6 +3113,15 @@ function bindPerfilEvents() {
     document.querySelectorAll(".avatar-option").forEach(b => b.classList.remove("selected"));
     btn.classList.add("selected");
     document.getElementById("perfil-avatar-preview").textContent = selectedAvatar;
+  });
+
+  document.getElementById("avatar-color-picker")?.addEventListener("click", e => {
+    const btn = e.target.closest(".avatar-color-option");
+    if (!btn) return;
+    selectedColor = btn.dataset.gradient;
+    document.querySelectorAll(".avatar-color-option").forEach(b => b.classList.remove("selected"));
+    btn.classList.add("selected");
+    document.getElementById("perfil-avatar-preview").style.background = selectedColor;
   });
 
   document.querySelectorAll(".eye-btn[data-target]").forEach(btn => {
@@ -1754,8 +3163,9 @@ function bindPerfilEvents() {
       currentUser.password = senhaNova;
     }
 
-    currentUser.name   = nome;
-    currentUser.avatar = selectedAvatar;
+    currentUser.name        = nome;
+    currentUser.avatar      = selectedAvatar;
+    currentUser.avatarColor = selectedColor;
     localStorage.setItem("pongo_user", JSON.stringify(currentUser));
     renderUserInfo();
 

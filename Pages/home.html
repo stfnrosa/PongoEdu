@@ -15,7 +15,7 @@
 
 <body>
   <nav class="navbar">
-    <div class="container d-flex justify-content-between align-items-center gap-3 flex-wrap">
+    <div class="container navbar-inner">
       <div class="d-flex align-items-center gap-3">
         <img src="../Assets/Imagens/Pongo.svg" class="logo-img" alt="PongoEdu">
         <div>
@@ -24,7 +24,7 @@
         </div>
       </div>
 
-      <div class="d-flex gap-3">
+      <div class="nav-btns d-flex gap-2">
         <a href="entrar.html" class="btn btn-outline-purple">
           <span class="material-symbols-rounded">arrow_forward</span>
           Entrar
@@ -52,15 +52,15 @@
               Centralize agendamentos, controle o estoque, prepare práticas e acompanhe tudo o que acontece no laboratório em um só lugar.
             </p>
 
-            <div class="d-flex flex-wrap gap-3 mb-5">
-              <button class="btn btn-green">
+            <div class="d-flex flex-column flex-sm-row gap-3 mb-4">
+              <a href="criar-conta.html" class="btn btn-green">
                 Conhecer funcionalidades
                 <span class="material-symbols-rounded">arrow_forward</span>
-              </button>
-              <button class="btn btn-demo">
+              </a>
+              <a href="criar-conta.html" class="btn btn-demo">
                 <span class="material-symbols-rounded icon-fill">play_arrow</span>
                 Ver demonstração
-              </button>
+              </a>
             </div>
 
             <div class="row g-4">
@@ -194,27 +194,25 @@
         <h2 class="section-title">Uma plataforma completa para <br><span>otimizar a rotina do laboratório</span></h2>
 
         <div class="row g-0">
-          <div class="col-md-2"><div class="feature-item"><div class="icon-box bg-green-soft mx-auto"><span class="material-symbols-rounded">calendar_month</span></div><h5>Agendamentos</h5><p>Crie e gerencie reservas dos laboratórios com facilidade.</p></div></div>
-          <div class="col-md-2"><div class="feature-item"><div class="icon-box bg-purple-soft mx-auto"><span class="material-symbols-rounded">experiment</span></div><h5>Preparar Práticas</h5><p>Organize materiais e etapas para garantir a segurança das aulas.</p></div></div>
-          <div class="col-md-2"><div class="feature-item"><div class="icon-box bg-orange-soft mx-auto"><span class="material-symbols-rounded">shopping_cart</span></div><h5>Solicitações</h5><p>Acompanhe e atenda solicitações de materiais de forma ágil.</p></div></div>
-          <div class="col-md-2"><div class="feature-item"><div class="icon-box bg-blue-soft mx-auto"><span class="material-symbols-rounded">local_shipping</span></div><h5>Entradas</h5><p>Registre entradas de materiais e mantenha o controle atualizado.</p></div></div>
-          <div class="col-md-2"><div class="feature-item"><div class="icon-box bg-green-soft mx-auto"><span class="material-symbols-rounded">deployed_code</span></div><h5>Estoque</h5><p>Consulte, controle e monitore o estoque do laboratório.</p></div></div>
-          <div class="col-md-2"><div class="feature-item"><div class="icon-box bg-purple-soft mx-auto"><span class="material-symbols-rounded">bar_chart</span></div><h5>Relatórios</h5><p>Gere relatórios e obtenha insights para tomar decisões melhores.</p></div></div>
+          <div class="col-6 col-md-3"><div class="feature-item"><div class="icon-box bg-green-soft mx-auto"><span class="material-symbols-rounded">calendar_month</span></div><h5>Agendamentos</h5><p>Crie e gerencie reservas dos laboratórios com facilidade.</p></div></div>
+          <div class="col-6 col-md-3"><div class="feature-item"><div class="icon-box bg-purple-soft mx-auto"><span class="material-symbols-rounded">experiment</span></div><h5>Preparar Práticas</h5><p>Organize materiais e etapas para garantir a segurança das aulas.</p></div></div>
+          <div class="col-6 col-md-3"><div class="feature-item"><div class="icon-box bg-orange-soft mx-auto"><span class="material-symbols-rounded">shopping_cart</span></div><h5>Solicitações</h5><p>Acompanhe e atenda solicitações de materiais de forma ágil.</p></div></div>
+          <div class="col-6 col-md-3"><div class="feature-item"><div class="icon-box bg-green-soft mx-auto"><span class="material-symbols-rounded">deployed_code</span></div><h5>Estoque</h5><p>Consulte, controle e monitore o estoque do laboratório.</p></div></div>
         </div>
 
         <div class="divider"></div>
 
         <div class="row align-items-center g-4">
           <div class="col-lg-4">
-            <div class="section-kicker justify-content-start"><span class="material-symbols-rounded">auto_awesome</span> Como funciona</div>
+            <div class="section-kicker"><span class="material-symbols-rounded">auto_awesome</span> Como funciona</div>
             <div class="flow-title">Fluxos simples que geram resultados reais</div>
           </div>
           <div class="col-lg-8">
             <div class="row g-3">
-              <div class="col-6"><div class="step-card"><div class="step-number" style="background:var(--green)">1</div><div class="icon-box bg-green-soft"><span class="material-symbols-rounded">calendar_month</span></div><h5>Agende</h5><p>Reserve o laboratório e defina os detalhes da prática.</p></div></div>
-              <div class="col-6"><div class="step-card"><div class="step-number" style="background:var(--purple)">2</div><div class="icon-box bg-purple-soft"><span class="material-symbols-rounded">experiment</span></div><h5>Prepare</h5><p>Separe os materiais, verifique o estoque e organize as etapas.</p></div></div>
-              <div class="col-6"><div class="step-card"><div class="step-number" style="background:var(--orange)">3</div><div class="icon-box bg-orange-soft"><span class="material-symbols-rounded">assignment_turned_in</span></div><h5>Execute</h5><p>Realize a prática com segurança e dentro do planejado.</p></div></div>
-              <div class="col-6"><div class="step-card"><div class="step-number" style="background:var(--blue)">4</div><div class="icon-box bg-blue-soft"><span class="material-symbols-rounded">bar_chart</span></div><h5>Acompanhe</h5><p>Monitore resultados, estoque e históricos do laboratório.</p></div></div>
+              <div class="col-12 col-sm-6"><div class="step-card"><div class="step-number" style="background:var(--green)">1</div><div class="icon-box bg-green-soft"><span class="material-symbols-rounded">calendar_month</span></div><h5>Agende</h5><p>Reserve o laboratório e defina os detalhes da prática.</p></div></div>
+              <div class="col-12 col-sm-6"><div class="step-card"><div class="step-number" style="background:var(--purple)">2</div><div class="icon-box bg-purple-soft"><span class="material-symbols-rounded">experiment</span></div><h5>Prepare</h5><p>Separe os materiais, verifique o estoque e organize as etapas.</p></div></div>
+              <div class="col-12 col-sm-6"><div class="step-card"><div class="step-number" style="background:var(--orange)">3</div><div class="icon-box bg-orange-soft"><span class="material-symbols-rounded">assignment_turned_in</span></div><h5>Execute</h5><p>Realize a prática com segurança e dentro do planejado.</p></div></div>
+              <div class="col-12 col-sm-6"><div class="step-card"><div class="step-number" style="background:var(--blue)">4</div><div class="icon-box bg-blue-soft"><span class="material-symbols-rounded">bar_chart</span></div><h5>Acompanhe</h5><p>Monitore resultados, estoque e históricos do laboratório.</p></div></div>
             </div>
           </div>
         </div>
@@ -225,9 +223,9 @@
         <h2 class="section-title">Para equipes que cuidam do <span>laboratório</span></h2>
 
         <div class="row g-3 mb-4">
-          <div class="col-md-4"><div class="persona-card"><div class="icon-box bg-green-soft"><span class="material-symbols-rounded">person</span></div><h5>Auxiliares de laboratório</h5><p>Agilize tarefas diárias e mantenha tudo sob controle.</p></div></div>
-          <div class="col-md-4"><div class="persona-card"><div class="icon-box bg-purple-soft"><span class="material-symbols-rounded">person</span></div><h5>Professores</h5><p>Planejem práticas e acompanhem agendamentos e materiais.</p></div></div>
-<div class="col-md-4"><div class="persona-card"><div class="icon-box bg-blue-soft"><span class="material-symbols-rounded">person</span></div><h5>Instituições de ensino</h5><p>Padronizem processos e aumentem a eficiência dos laboratórios.</p></div></div>
+          <div class="col-12 col-md-4"><div class="persona-card"><div class="icon-box bg-green-soft"><span class="material-symbols-rounded">person</span></div><h5>Auxiliares de laboratório</h5><p>Agilize tarefas diárias e mantenha tudo sob controle.</p></div></div>
+          <div class="col-12 col-md-4"><div class="persona-card"><div class="icon-box bg-purple-soft"><span class="material-symbols-rounded">person</span></div><h5>Professores</h5><p>Planejem práticas e acompanhem agendamentos e materiais.</p></div></div>
+<div class="col-12 col-md-4"><div class="persona-card"><div class="icon-box bg-blue-soft"><span class="material-symbols-rounded">person</span></div><h5>Instituições de ensino</h5><p>Padronizem processos e aumentem a eficiência dos laboratórios.</p></div></div>
         </div>
 
         <div class="cta-box">
@@ -235,7 +233,7 @@
             <div class="cta-icon"><span class="material-symbols-rounded">check</span></div>
             <h3 class="fw-bold mb-0">Mais organização. Mais segurança.<br>Mais tempo para o que realmente importa.</h3>
           </div>
-          <button class="btn btn-green" onclick="location.href='criar-conta.html'">Começar agora <span class="material-symbols-rounded">arrow_forward</span></button>
+          <a class="btn btn-green" href="criar-conta.html">Começar agora <span class="material-symbols-rounded">arrow_forward</span></a>
         </div>
 
         <footer>
@@ -259,10 +257,35 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    document.querySelectorAll('button').forEach((button) => {
-      button.addEventListener('click', () => {
-        button.style.transform = 'scale(0.97)';
-        setTimeout(() => button.style.transform = 'scale(1)', 120);
+    // Hambúrguer mobile
+    const menuBtn = document.getElementById('home-menu-btn');
+    const mobileNav = document.getElementById('home-mobile-nav');
+    menuBtn?.addEventListener('click', () => {
+      mobileNav.classList.toggle('open');
+      menuBtn.classList.toggle('open');
+    });
+
+    // Fechar menu ao clicar em um link
+    mobileNav?.querySelectorAll('a').forEach(a => {
+      a.addEventListener('click', () => {
+        mobileNav.classList.remove('open');
+        menuBtn.classList.remove('open');
+      });
+    });
+
+    // Fechar ao clicar fora
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.navbar')) {
+        mobileNav?.classList.remove('open');
+        menuBtn?.classList.remove('open');
+      }
+    });
+
+    // Efeito de pressão nos botões
+    document.querySelectorAll('.btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.style.transform = 'scale(0.97)';
+        setTimeout(() => btn.style.transform = '', 120);
       });
     });
   </script>

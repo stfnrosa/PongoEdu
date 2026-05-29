@@ -1,0 +1,52 @@
+[
+  {
+    "id": "1",
+    "titulo": "Titulação Ácido-Base",
+    "categoria": "Química",
+    "duracao": { "horas": 2, "minutos": 0 },
+    "turma": "3º Ano A",
+    "observacao": "Usar equipamentos de proteção individual obrigatoriamente.",
+    "materiais": [
+      { "produtoId": "1", "qty": "200 ml" },
+      { "produtoId": "2", "qty": "50 g" },
+      { "produtoId": "4", "qty": "2 unid." }
+    ]
+  },
+  {
+    "id": "2",
+    "titulo": "Destilação Simples",
+    "categoria": "Química",
+    "duracao": { "horas": 1, "minutos": 30 },
+    "turma": "2º Ano B",
+    "observacao": "",
+    "materiais": [
+      { "produtoId": "4", "qty": "1 L" },
+      { "produtoId": "15", "qty": "1 unid." }
+    ]
+  },
+  {
+    "id": "3",
+    "titulo": "Eletroquímica Básica",
+    "categoria": "Química",
+    "duracao": { "horas": 2, "minutos": 0 },
+    "turma": "",
+    "observacao": "",
+    "materiais": [
+      { "produtoId": "3", "qty": "100 g" },
+      { "produtoId": "5", "qty": "500 ml" }
+    ]
+  },
+  {
+    "id": "4",
+    "titulo": "Síntese Orgânica I",
+    "categoria": "Química",
+    "duracao": { "horas": 3, "minutos": 0 },
+    "turma": "3º Ano A",
+    "observacao": "Realizar em capela de exaustão.",
+    "materiais": [
+      { "produtoId": "1", "qty": "100 ml" },
+      { "produtoId": "2", "qty": "30 g" },
+      { "produtoId": "5", "qty": "200 ml" }
+    ]
+  }
+]

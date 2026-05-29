@@ -1,0 +1,52 @@
+[
+  {
+    "id": "1",
+    "produto": "Microscópio Óptico",
+    "quantidade": "1 unidade",
+    "dataInicio": "2026-05-28",
+    "horaInicio": "08:00",
+    "dataFim": "2026-05-28",
+    "horaFim": "12:00",
+    "status": "agendado"
+  },
+  {
+    "id": "2",
+    "produto": "Centrífuga de Bancada",
+    "quantidade": "1 unidade",
+    "dataInicio": "2026-05-27",
+    "horaInicio": "13:00",
+    "dataFim": "2026-05-27",
+    "horaFim": "17:00",
+    "status": "em-andamento"
+  },
+  {
+    "id": "3",
+    "produto": "Medidor de pH",
+    "quantidade": "1 unidade",
+    "dataInicio": "2026-05-25",
+    "horaInicio": "08:00",
+    "dataFim": "2026-05-25",
+    "horaFim": "12:00",
+    "status": "concluido"
+  },
+  {
+    "id": "4",
+    "produto": "Agitador Magnético",
+    "quantidade": "1 unidade",
+    "dataInicio": "2026-05-23",
+    "horaInicio": "14:00",
+    "dataFim": "2026-05-23",
+    "horaFim": "18:00",
+    "status": "concluido"
+  },
+  {
+    "id": "5",
+    "produto": "Balança Analítica",
+    "quantidade": "1 unidade",
+    "dataInicio": "2026-05-21",
+    "horaInicio": "09:00",
+    "dataFim": "2026-05-21",
+    "horaFim": "13:00",
+    "status": "concluido"
+  }
+]

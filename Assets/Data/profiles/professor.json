@@ -10,8 +10,8 @@
       "type": "link"
     },
     {
-      "id": "inventario",
-      "label": "Inventário",
+      "id": "estoque",
+      "label": "Estoque",
       "icon": "inventory_2",
       "type": "group",
       "defaultOpen": true,
@@ -21,6 +21,12 @@
           "label": "Produtos",
           "icon": "science",
           "page": "produtos"
+        },
+        {
+          "id": "emprestimos",
+          "label": "Empréstimos",
+          "icon": "swap_horiz",
+          "page": "emprestimos"
         }
       ]
     },
@@ -32,15 +38,15 @@
       "defaultOpen": true,
       "children": [
         {
-          "id": "criar-roteiro",
-          "label": "Criar Roteiro",
-          "icon": "assignment_add",
-          "page": "criar-roteiro"
+          "id": "roteiros",
+          "label": "Roteiros",
+          "icon": "list_alt",
+          "page": "meus-roteiros"
         },
         {
-          "id": "meus-agendamentos",
-          "label": "Meus Agendamentos",
-          "icon": "assignment",
+          "id": "agenda",
+          "label": "Agenda",
+          "icon": "calendar_month",
           "page": "meus-agendamentos"
         }
       ]
@@ -160,12 +166,6 @@
           "descricao": "Destilação Simples • 08/06 às 14h",
           "status": "preparada",
           "tempo": "Há 1 hora"
-        },
-        {
-          "titulo": "Bancada 3 pendente",
-          "descricao": "Reação de Oxidação • 10/06 às 10h",
-          "status": "pendente",
-          "tempo": "Há 2 horas"
         }
       ]
     }
