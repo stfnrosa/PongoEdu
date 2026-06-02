@@ -1,0 +1,29 @@
+[
+  {
+    "id": "not-001",
+    "tipo": "solicitacao",
+    "mensagem": "Preciso de 2 litros de Ácido Clorídrico para a prática de Titulação do dia 10/06. Favor verificar disponibilidade.",
+    "data": "2026-05-30",
+    "lida": false,
+    "origem": "professor",
+    "professor": "Dr. João Silva"
+  },
+  {
+    "id": "not-002",
+    "tipo": "solicitacao",
+    "mensagem": "Para a prática de Eletroforese em 15/06 precisarei de Luvas Nitrílicas (mínimo 3 caixas) e Béqueres de 250 ml (pelo menos 10 unidades).",
+    "data": "2026-06-02",
+    "lida": false,
+    "origem": "professor",
+    "professor": "Dra. Maria Fernanda"
+  },
+  {
+    "id": "not-003",
+    "tipo": "solicitacao",
+    "mensagem": "Solicito reposição de Etanol Absoluto antes do dia 08/06 — o frasco atual está quase no fim.",
+    "data": "2026-06-01",
+    "lida": true,
+    "origem": "professor",
+    "professor": "Dr. João Silva"
+  }
+]

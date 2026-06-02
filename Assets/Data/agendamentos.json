@@ -1,52 +1,62 @@
 [
   {
     "id": "1",
-    "titulo": "Lab Química",
+    "titulo": "Lab Química — Titulação",
+    "professor": "Prof. João Silva",
     "roteiro": "Titulação Ácido-Base",
     "turma": "3º Ano A",
-    "data": "2026-05-25",
+    "data": "2026-06-02",
     "horaInicio": "08:00",
     "horaFim": "10:00",
-    "status": "preparado"
+    "status": "preparado",
+    "observacoes": ""
   },
   {
     "id": "2",
-    "titulo": "Lab Biologia",
+    "titulo": "Lab Biologia — Destilação",
+    "professor": "Profa. Maria Fernanda",
     "roteiro": "Destilação Simples",
     "turma": "2º Ano B",
-    "data": "2026-05-26",
+    "data": "2026-06-03",
     "horaInicio": "10:30",
     "horaFim": "12:30",
-    "status": "preparado"
+    "status": "preparado",
+    "observacoes": "Confirmar bancadas 1 e 2."
   },
   {
     "id": "3",
-    "titulo": "Lab Química",
-    "roteiro": "Titulação Ácido-Base",
+    "titulo": "Lab Química — Eletroforese",
+    "professor": "Profa. Maria Fernanda",
+    "roteiro": "Eletroforese",
     "turma": "3º Ano A",
-    "data": "2026-05-27",
+    "data": "2026-06-04",
     "horaInicio": "14:00",
     "horaFim": "16:00",
-    "status": "preparado"
+    "status": "preparado",
+    "observacoes": ""
   },
   {
     "id": "4",
-    "titulo": "Lab Física",
+    "titulo": "Lab Física — Oxidação",
+    "professor": "Prof. Carlos Mendes",
     "roteiro": "Reação de Oxidação",
     "turma": "1º Ano C",
-    "data": "2026-05-28",
+    "data": "2026-06-05",
     "horaInicio": "16:30",
     "horaFim": "18:30",
-    "status": "pendente"
+    "status": "pendente",
+    "observacoes": ""
   },
   {
     "id": "5",
-    "titulo": "Lab Química",
+    "titulo": "Lab Química — Síntese",
+    "professor": "Prof. João Silva",
     "roteiro": "Síntese Orgânica I",
     "turma": "3º Ano A",
-    "data": "2026-05-29",
-    "horaInicio": "19:00",
-    "horaFim": "21:00",
-    "status": "pendente"
+    "data": "2026-06-06",
+    "horaInicio": "09:00",
+    "horaFim": "11:00",
+    "status": "pendente",
+    "observacoes": "Solicitar luvas extras."
   }
 ]

@@ -3,50 +3,72 @@
     "id": "1",
     "produto": "Microscópio Óptico",
     "quantidade": "1 unidade",
-    "dataInicio": "2026-05-28",
+    "professor": "Dr. João Silva",
+    "dataInicio": "2026-06-10",
     "horaInicio": "08:00",
-    "dataFim": "2026-05-28",
+    "dataFim": "2026-06-10",
     "horaFim": "12:00",
-    "status": "agendado"
+    "status": "pendente",
+    "observacoes": "Para aula de Biologia Celular - turma 3A."
   },
   {
     "id": "2",
     "produto": "Centrífuga de Bancada",
     "quantidade": "1 unidade",
-    "dataInicio": "2026-05-27",
+    "professor": "Dra. Maria Fernanda",
+    "dataInicio": "2026-06-12",
     "horaInicio": "13:00",
-    "dataFim": "2026-05-27",
+    "dataFim": "2026-06-12",
     "horaFim": "17:00",
-    "status": "em-andamento"
+    "status": "pendente",
+    "observacoes": "Prática de Eletroforese - turma 2B."
   },
   {
     "id": "3",
     "produto": "Medidor de pH",
-    "quantidade": "1 unidade",
-    "dataInicio": "2026-05-25",
+    "quantidade": "2 unidades",
+    "professor": "Dr. João Silva",
+    "dataInicio": "2026-06-05",
     "horaInicio": "08:00",
-    "dataFim": "2026-05-25",
+    "dataFim": "2026-06-05",
     "horaFim": "12:00",
-    "status": "concluido"
+    "status": "agendado",
+    "observacoes": ""
   },
   {
     "id": "4",
     "produto": "Agitador Magnético",
     "quantidade": "1 unidade",
-    "dataInicio": "2026-05-23",
+    "professor": "Prof. Carlos Mendes",
+    "dataInicio": "2026-05-30",
     "horaInicio": "14:00",
-    "dataFim": "2026-05-23",
+    "dataFim": "2026-05-30",
     "horaFim": "18:00",
-    "status": "concluido"
+    "status": "em-andamento",
+    "observacoes": "Titulação Ácido-Base."
   },
   {
     "id": "5",
     "produto": "Balança Analítica",
     "quantidade": "1 unidade",
+    "professor": "Dra. Maria Fernanda",
     "dataInicio": "2026-05-21",
     "horaInicio": "09:00",
     "dataFim": "2026-05-21",
     "horaFim": "13:00",
-    "status": "concluido"
+    "status": "concluido",
+    "observacoes": ""
+  },
+  {
+    "id": "6",
+    "produto": "Termômetro Digital",
+    "quantidade": "3 unidades",
+    "professor": "Prof. Carlos Mendes",
+    "dataInicio": "2026-05-18",
+    "horaInicio": "10:00",
+    "dataFim": "2026-05-18",
+    "horaFim": "14:00",
+    "status": "recusado",
+    "observacoes": "Equipamento em manutenção no período solicitado."
   }
 ]

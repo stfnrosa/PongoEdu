@@ -27,6 +27,12 @@
           "label": "Categoria de Produtos",
           "icon": "category",
           "page": "categorias-produtos"
+        },
+        {
+          "id": "movimentacoes",
+          "label": "Movimentações",
+          "icon": "swap_horiz",
+          "page": "movimentacoes"
         }
       ]
     },
@@ -42,6 +48,12 @@
           "label": "Compras",
           "icon": "shopping_bag",
           "page": "compras"
+        },
+        {
+          "id": "emprestimos",
+          "label": "Empréstimos",
+          "icon": "swap_horiz",
+          "page": "emprestimos"
         }
       ]
     },
@@ -69,15 +81,9 @@
       "children": [
         {
           "id": "reservas",
-          "label": "Reservas",
-          "icon": "event_available",
+          "label": "Agenda",
+          "icon": "calendar_month",
           "page": "reservas"
-        },
-        {
-          "id": "preparar-pratica",
-          "label": "Preparar Prática",
-          "icon": "assignment",
-          "page": "preparar-pratica"
         }
       ]
     }
@@ -125,8 +131,9 @@
     "table": {
       "title": "Últimas Movimentações de Estoque",
       "icon": "swap_horiz",
-      "showLink": false,
-      "search": true,
+      "showLink": true,
+      "footerPage": "movimentacoes",
+      "search": false,
       "searchPlaceholder": "Buscar produto...",
       "columns": ["Produto", "Categoria", "Qtd", "Tipo", "Status"],
       "rows": [

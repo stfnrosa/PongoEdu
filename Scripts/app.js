@@ -89,6 +89,174 @@ let localRoteiros = null;
 let roteirosFilter = { search: "", categoria: "all" };
 let currentEditRoteiroId = null;
 
+let localEntradas = null;
+let entradasFilter = { search: "", status: "all" };
+let currentEditEntradaDocId = null;
+
+let localSolicitacoes = null;
+let solicitacoesFilter = { search: "", origem: "all", status: "pendente" };
+
+let localMovimentacoes = null;
+let movFilter = { search: "", tipo: "all" };
+
+/* ---- Modal de confirmação reutilizável ---- */
+function showConfirmModal({ title, message, confirmLabel, confirmIcon = "check", danger = false, onConfirm }) {
+  let modal = document.getElementById("pongo-confirm-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "pongo-confirm-modal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+      <div class="modal-card">
+        <div class="modal-header">
+          <span class="modal-title" id="pcm-title"></span>
+        </div>
+        <div class="modal-body">
+          <p id="pcm-message" style="font-size:14px;color:var(--dark);line-height:1.65;margin:0"></p>
+        </div>
+        <div class="modal-footer" id="pcm-footer"></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  document.getElementById("pcm-title").textContent   = title;
+  document.getElementById("pcm-message").textContent = message;
+  document.getElementById("pcm-footer").innerHTML = `
+    <button class="btn btn-outline-secondary btn-pongo" id="pcm-cancel">Cancelar</button>
+    <button class="btn btn-pongo fw-bold d-flex align-items-center gap-2 ${danger ? "btn-danger" : "btn-success"}" id="pcm-confirm">
+      <span class="material-symbols-rounded" style="font-size:17px">${confirmIcon}</span>
+      ${confirmLabel}
+    </button>
+  `;
+  modal.classList.add("open");
+  modal.onclick = e => { if (e.target === modal) modal.classList.remove("open"); };
+
+  const close = () => modal.classList.remove("open");
+  document.getElementById("pcm-confirm").addEventListener("click", () => { close(); onConfirm(); });
+  document.getElementById("pcm-cancel").addEventListener("click", close);
+}
+
+/* ---- Helpers de exibição e estoque ---- */
+
+function fmtQty(prod) {
+  if (!prod) return "—";
+  return `${prod.quantidade ?? "—"} ${prod.unidadeMedida || ""}`.trim();
+}
+
+function parseQty(str) {
+  const m = (str || "").trim().match(/^(\d+(?:[.,]\d+)?)\s*(.*)?$/);
+  if (!m) return { num: 0, unit: str || "" };
+  return { num: parseFloat(m[1].replace(",", ".")), unit: (m[2] || "").trim() };
+}
+
+function updateProdutoStatus(prod) {
+  if (!prod.controlaEstoque) return;
+  if (prod.status === "vencido") return;
+  const min = prod.estoqueMinimo || 0;
+  prod.status = (min > 0 && prod.quantidade <= min) ? "estoque-baixo" : "normal";
+}
+
+function gerarNumeroSolicitacao() {
+  const ano = new Date().getFullYear();
+  const seq = String((localSolicitacoes || []).length + 1).padStart(3, "0");
+  return `SOL-${ano}-${seq}`;
+}
+
+function criarSolicitacao({ produtoId, produto, unidadeMedida, quantidadeSolicitada,
+                            quantidadeDisponivel, estoqueMinimo, origem,
+                            solicitante, agendamentoId = null, observacoes = "" }) {
+  // Não duplicar: se já existe pendente para o mesmo produto, não cria nova
+  const existente = (localSolicitacoes || []).find(
+    s => s.produtoId === produtoId && s.status === "pendente"
+  );
+  if (existente) return existente;
+
+  const nova = {
+    id:                   `sol-${Date.now()}`,
+    numero:               gerarNumeroSolicitacao(),
+    data:                 new Date().toISOString().slice(0, 10),
+    origem,
+    status:               "pendente",
+    solicitante,
+    agendamentoId,
+    produtoId,
+    produto,
+    quantidadeSolicitada,
+    unidadeMedida,
+    quantidadeDisponivel,
+    estoqueMinimo:        estoqueMinimo || 0,
+    observacoes,
+  };
+  localSolicitacoes = [nova, ...(localSolicitacoes || [])];
+  return nova;
+}
+
+/* ---- Histórico de alterações de agendamento ---- */
+function registrarHistorico(agend, novoStatus, justificativa = "") {
+  if (!agend.historico) agend.historico = [];
+  agend.historico.push({
+    statusAnterior: agend.status,
+    novoStatus,
+    usuario:        currentUser?.name || "Sistema",
+    perfil:         currentUser?.profile || "sistema",
+    dataHora:       new Date().toISOString(),
+    justificativa,
+  });
+}
+
+function autoConcludeAgendamento(agend) {
+  if (agend.status !== "preparado") return;
+  const end = new Date(`${agend.data}T${agend.horaFim}`);
+  if (new Date() > end) {
+    registrarHistorico(agend, "concluido");
+    agend.status = "concluido";
+  }
+}
+
+function cancelarAgendamento(agend, justificativa = "") {
+  registrarHistorico(agend, "cancelado", justificativa);
+  agend.status        = "cancelado";
+  agend.canceladoPor  = currentUser?.name || "";
+  agend.canceladoEm   = new Date().toISOString();
+}
+
+function checkEstoqueMinimo() {
+  (localProdutos || []).forEach(prod => {
+    if (!prod.controlaEstoque || !prod.estoqueMinimo || prod.status === "vencido") return;
+    if (prod.quantidade <= prod.estoqueMinimo) {
+      criarSolicitacao({
+        produtoId:            prod.id,
+        produto:              prod.nome,
+        unidadeMedida:        prod.unidadeMedida || "",
+        quantidadeSolicitada: prod.estoqueMinimo - prod.quantidade,
+        quantidadeDisponivel: prod.quantidade,
+        estoqueMinimo:        prod.estoqueMinimo,
+        origem:               "estoque-minimo",
+        solicitante:          "Sistema",
+      });
+    }
+  });
+}
+
+function addItemToStock(item) {
+  const prod = (localProdutos || []).find(p => p.id === item.produtoId);
+  if (!prod || !prod.controlaEstoque) return;
+  const qty = parseQty(item.quantidade);
+  prod.quantidade = (prod.quantidade || 0) + (qty.num || 0);
+  updateProdutoStatus(prod);
+  checkEstoqueMinimo();
+}
+
+function removeItemFromStock(item) {
+  const prod = (localProdutos || []).find(p => p.id === item.produtoId);
+  if (!prod || !prod.controlaEstoque) return;
+  const qty = parseQty(item.quantidade);
+  prod.quantidade = Math.max(0, (prod.quantidade || 0) - (qty.num || 0));
+  updateProdutoStatus(prod);
+  checkEstoqueMinimo();
+}
+
 function getLocalCategorias() {
   if (!localCategorias) {
     localCategorias = JSON.parse(JSON.stringify(appData.categorias || []));
@@ -149,17 +317,23 @@ async function initApp() {
     localStorage.setItem("pongo_user", JSON.stringify(currentUser));
   }
 
-  const [profileData, agendamentos, categorias, produtos, roteiros, emprestimos] = await Promise.all([
+  const [profileData, agendamentos, categorias, produtos, roteiros, emprestimos, entradas, solicitacoes, movimentacoes] = await Promise.all([
     loadJSON(`${BASE_DATA}/profiles/${currentUser.profile}.json`),
     loadJSON(`${BASE_DATA}/agendamentos.json`),
     loadJSON(`${BASE_DATA}/categorias.json`),
     loadJSON(`${BASE_DATA}/produtos.json`),
     loadJSON(`${BASE_DATA}/roteiros.json`),
     loadJSON(`${BASE_DATA}/emprestimos.json`),
+    loadJSON(`${BASE_DATA}/entradas.json`),
+    loadJSON(`${BASE_DATA}/solicitacoes.json`),
+    loadJSON(`${BASE_DATA}/movimentacoes.json`),
   ]);
 
-  localProdutos = produtos;
-  localRoteiros = JSON.parse(JSON.stringify(roteiros || []));
+  localProdutos      = produtos;
+  localRoteiros      = JSON.parse(JSON.stringify(roteiros      || []));
+  localEntradas      = JSON.parse(JSON.stringify(entradas      || []));
+  localSolicitacoes  = JSON.parse(JSON.stringify(solicitacoes  || []));
+  localMovimentacoes = JSON.parse(JSON.stringify(movimentacoes || []));
   appData = {
     profiles:   { [currentUser.profile]: { role: profileData.role } },
     menus:      { [currentUser.profile]: profileData.menu },
@@ -347,6 +521,26 @@ function loadPage(page) {
     return;
   }
 
+  if (page === "reservas") {
+    renderReservas();
+    return;
+  }
+
+  if (page === "movimentacoes") {
+    renderMovimentacoes();
+    return;
+  }
+
+  if (page === "entradas") {
+    renderEntradas();
+    return;
+  }
+
+  if (page === "compras") {
+    renderCompras();
+    return;
+  }
+
   renderPlaceholder(page);
 }
 
@@ -428,6 +622,26 @@ function enrichDashboardData(dashboard, profile) {
         icon:  s.icon,
         color: s.color,
       };
+    });
+
+    // Popula tabela com movimentações reais (últimas 5)
+    const tipoColor  = { entrada: "green", saida: "orange", compra: "blue", emprestimo: "purple" };
+    const statusColor = {
+      confirmado: "green", pendente: "orange", "em-transito": "blue",
+      "em-andamento": "blue", concluido: "green", agendado: "purple", cancelado: "red",
+    };
+    data.table.rows = (localMovimentacoes || []).slice(0, 5).map(m => {
+      const ti = MOV_TIPO_MAP[m.tipo]    || { label: m.tipo,   icon: "swap_horiz" };
+      const si = MOV_STATUS_MAP[m.status] || { label: m.status };
+      const tc = tipoColor[m.tipo]       || "purple";
+      const sc = statusColor[m.status]   || "orange";
+      return [
+        { type: "iconText", icon: "science", text: m.produto, color: tc },
+        m.categoria,
+        m.quantidade,
+        { type: "iconText", icon: ti.icon, text: ti.label, color: tc },
+        { type: "status", label: si.label || m.status, color: sc },
+      ];
     });
   }
 
@@ -878,26 +1092,35 @@ function formatDateBR(dateStr) {
   return `${d}/${m}/${y}`;
 }
 
-function buildEmprestimosList(items) {
+function buildEmprestimosList(items, isAuxiliar = false) {
   const statusMap = {
-    pendente:      { label: "Pendente",     cls: "emp-status-agendado",  icon: "schedule" },
-    agendado:      { label: "Agendado",     cls: "emp-status-agendado",  icon: "schedule" },
+    pendente:      { label: "Pendente",     cls: "emp-status-pendente",  icon: "schedule" },
+    agendado:      { label: "Agendado",     cls: "emp-status-agendado",  icon: "event_available" },
     "em-andamento":{ label: "Em andamento", cls: "emp-status-andamento", icon: "autorenew" },
     concluido:     { label: "Concluído",    cls: "emp-status-concluido", icon: "check_circle" },
+    recusado:      { label: "Recusado",     cls: "emp-status-recusado",  icon: "cancel" },
   };
-  const editableStatuses = ["pendente", "agendado"];
+  const cols = isAuxiliar ? 7 : 6;
 
   if (items.length === 0) {
-    return `<tr class="table-empty-row"><td colspan="6">Nenhum empréstimo encontrado.</td></tr>`;
+    return `<tr class="table-empty-row"><td colspan="${cols}">Nenhum empréstimo encontrado.</td></tr>`;
   }
 
   return items.map(e => {
-    const s = statusMap[e.status] || { label: e.status, cls: "", icon: "help" };
-    const canEdit = editableStatuses.includes(e.status);
+    const s        = statusMap[e.status] || { label: e.status, cls: "", icon: "help" };
+    const isPend   = e.status === "pendente";
+    const canEdit  = !isAuxiliar && ["pendente", "agendado"].includes(e.status);
+
     return `
       <tr>
         <td><span class="emp-produto-nome">${e.produto}</span></td>
         <td>${e.quantidade}</td>
+        ${isAuxiliar ? `<td>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="material-symbols-rounded" style="font-size:16px;color:var(--purple)">school</span>
+            ${e.professor || `<span style="color:var(--muted)">—</span>`}
+          </div>
+        </td>` : ""}
         <td>${formatDateBR(e.dataInicio)} ${e.horaInicio}</td>
         <td>${formatDateBR(e.dataFim)} ${e.horaFim}</td>
         <td>
@@ -911,6 +1134,13 @@ function buildEmprestimosList(items) {
             <button class="action-icon-btn" title="Visualizar" data-view-emp-id="${e.id}">
               <span class="material-symbols-rounded">visibility</span>
             </button>
+            ${isAuxiliar && isPend ? `
+            <button class="action-icon-btn" title="Aceitar empréstimo" style="color:var(--green)" data-aceitar-emp-id="${e.id}">
+              <span class="material-symbols-rounded">check_circle</span>
+            </button>
+            <button class="action-icon-btn delete" title="Recusar empréstimo" data-recusar-emp-id="${e.id}">
+              <span class="material-symbols-rounded">cancel</span>
+            </button>` : ""}
             ${canEdit ? `
             <button class="action-icon-btn" title="Editar" data-edit-emp-id="${e.id}">
               <span class="material-symbols-rounded">edit</span>
@@ -995,31 +1225,45 @@ function buildCriarEmprestimoModal() {
 }
 
 function renderEmprestimos() {
-  const empData = appData.emprestimos || [];
-  let empFilter = { search: "", status: "all" };
+  const isAuxiliar = currentUser.profile === "auxiliar";
+  const empData    = appData.emprestimos || [];
+  let empFilter    = { search: "", status: "all" };
+
+  const statusOpts = [
+    { key: "all",          label: "Todos" },
+    { key: "pendente",     label: "Pendente" },
+    { key: "agendado",     label: "Agendado" },
+    { key: "em-andamento", label: "Em andamento" },
+    { key: "concluido",    label: "Concluído" },
+    ...(isAuxiliar ? [{ key: "recusado", label: "Recusado" }] : []),
+  ];
 
   const renderList = () => {
     const q = empFilter.search.toLowerCase();
     const filtered = empData.filter(e => {
-      const matchSearch = !q || e.produto.toLowerCase().includes(q);
+      const matchSearch = !q || e.produto.toLowerCase().includes(q) ||
+        (isAuxiliar && (e.professor || "").toLowerCase().includes(q));
       const matchStatus = empFilter.status === "all" || e.status === empFilter.status;
       return matchSearch && matchStatus;
     });
     const container = document.getElementById("emp-list-container");
-    if (container) container.innerHTML = buildEmprestimosList(filtered);
-    const badge = document.getElementById("emp-result-badge");
-    if (badge) badge.outerHTML; // atualiza via re-render completo
+    if (container) container.innerHTML = buildEmprestimosList(filtered, isAuxiliar);
+    bindEmpTableButtons(isAuxiliar);
     return filtered;
   };
 
+  const pendentes = empData.filter(e => e.status === "pendente").length;
+
   document.getElementById("main-content").innerHTML = `
     <div class="agend-page">
-      <h1 class="page-section-title">Empréstimos</h1>
-      <p class="page-section-sub">Acompanhe os empréstimos de materiais e equipamentos do laboratório.</p>
+      <h1 class="page-section-title">${isAuxiliar ? "Solicitações de Empréstimo" : "Empréstimos"}</h1>
+      <p class="page-section-sub">${isAuxiliar
+        ? "Visualize todas as solicitações e aceite ou recuse conforme a disponibilidade dos equipamentos."
+        : "Acompanhe os empréstimos de materiais e equipamentos do laboratório."}</p>
       <div class="page-toolbar">
         <label class="page-search">
           <span class="material-symbols-rounded">search</span>
-          <input type="text" id="emp-search" placeholder="Buscar equipamento...">
+          <input type="text" id="emp-search" placeholder="${isAuxiliar ? "Buscar produto ou professor..." : "Buscar equipamento..."}">
         </label>
 
         <div class="filter-dropdown-wrap">
@@ -1029,13 +1273,7 @@ function renderEmprestimos() {
             <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
           </button>
           <div class="filter-dropdown-menu" id="emp-status-filter-menu">
-            ${[
-              { key: "all",          label: "Todos" },
-              { key: "pendente",     label: "Pendente" },
-              { key: "agendado",     label: "Agendado" },
-              { key: "em-andamento", label: "Em andamento" },
-              { key: "concluido",    label: "Concluído" },
-            ].map((o, i) => `
+            ${statusOpts.map((o, i) => `
               <div class="filter-option ${i === 0 ? "active" : ""}" data-emp-status="${o.key}">${o.label}</div>
             `).join("")}
           </div>
@@ -1049,10 +1287,12 @@ function renderEmprestimos() {
 
       <div class="list-card">
         <div class="list-card-header">
-          <span class="list-card-title">Lista de Empréstimos</span>
+          <span class="list-card-title">${isAuxiliar ? "Todos os Empréstimos" : "Lista de Empréstimos"}</span>
           <div style="display:flex;align-items:center;gap:12px">
-            ${resultBadge(empData.length)}
-            ${btnCreate({ id: "new-emprestimo-btn", label: "Criar Empréstimo" })}
+            ${isAuxiliar && pendentes > 0
+              ? `<span class="badge rounded-pill" style="background:#fff8e6;color:#b45309;font-size:11px;font-weight:700;padding:5px 12px">${pendentes} pendente(s)</span>`
+              : resultBadge(empData.length)}
+            ${!isAuxiliar ? btnCreate({ id: "new-emprestimo-btn", label: "Criar Empréstimo" }) : ""}
           </div>
         </div>
         <div class="list-card-inner">
@@ -1062,6 +1302,7 @@ function renderEmprestimos() {
                 <tr>
                   <th>Produto</th>
                   <th>Quantidade</th>
+                  ${isAuxiliar ? "<th>Professor</th>" : ""}
                   <th>Data início</th>
                   <th>Data fim</th>
                   <th>Status</th>
@@ -1069,13 +1310,14 @@ function renderEmprestimos() {
                 </tr>
               </thead>
               <tbody id="emp-list-container">
-                ${buildEmprestimosList(empData)}
+                ${buildEmprestimosList(empData, isAuxiliar)}
               </tbody>
             </table>
           </div>
         </div>
       </div>
-      ${buildCriarEmprestimoModal()}
+      ${!isAuxiliar ? buildCriarEmprestimoModal() : ""}
+      ${buildViewEmprestimoModal()}
     </div>
   `;
 
@@ -1123,104 +1365,269 @@ function renderEmprestimos() {
     const qty = document.getElementById("emp-qty")?.value || "1";
 
     const novo = {
-      id: String(Date.now()),
-      produto: produto?.nome || produtoEl.value,
+      id:         String(Date.now()),
+      produto:    produto?.nome || produtoEl.value,
       quantidade: `${qty} unidade${qty > 1 ? "s" : ""}`,
+      professor:  currentUser.name,
       dataInicio, horaInicio: horaInicio?.slice(0,5) || "",
       dataFim,    horaFim:    horaFim?.slice(0,5)    || "",
-      status: "agendado",
+      observacoes: document.getElementById("emp-obs")?.value.trim() || "",
+      status:     "pendente",
     };
     appData.emprestimos.push(novo);
     empData.push(novo);
 
     closeEmpModal();
     const container = document.getElementById("emp-list-container");
-    if (container) container.innerHTML = buildEmprestimosList(empData);
-    bindEmpActions();
-    showToast("Solicitação de empréstimo enviada com sucesso.");
+    if (container) container.innerHTML = buildEmprestimosList(empData, isAuxiliar);
+    bindEmpTableButtons(isAuxiliar);
+    showToast("Solicitação de empréstimo enviada. Aguardando aprovação do auxiliar.");
   });
 
   document.getElementById("emp-search")?.addEventListener("input", e => {
     empFilter.search = e.target.value;
-    const q = empFilter.search.toLowerCase();
-    const filtered = empData.filter(ev => {
-      const matchSearch = !q || ev.produto.toLowerCase().includes(q);
-      const matchStatus = empFilter.status === "all" || ev.status === empFilter.status;
-      return matchSearch && matchStatus;
-    });
-    const container = document.getElementById("emp-list-container");
-    if (container) container.innerHTML = buildEmprestimosList(filtered);
+    renderList();
   });
 
   const empBtn  = document.getElementById("emp-status-filter-btn");
   const empMenu = document.getElementById("emp-status-filter-menu");
   empBtn?.addEventListener("click", e => { e.stopPropagation(); empMenu.classList.toggle("open"); });
   empMenu?.querySelectorAll(".filter-option").forEach(opt => {
-    opt.addEventListener("click", e => {
-      e.stopPropagation();
+    opt.addEventListener("click", ev => {
+      ev.stopPropagation();
       empFilter.status = opt.dataset.empStatus;
       empMenu.classList.remove("open");
       empBtn.classList.toggle("active-filter", empFilter.status !== "all");
-      empMenu.querySelectorAll(".filter-option").forEach(o =>
-        o.classList.toggle("active", o === opt)
-      );
-      const q = empFilter.search.toLowerCase();
-      const filtered = empData.filter(ev => {
-        const matchSearch = !q || ev.produto.toLowerCase().includes(q);
-        const matchStatus = empFilter.status === "all" || ev.status === empFilter.status;
-        return matchSearch && matchStatus;
-      });
-      const container = document.getElementById("emp-list-container");
-      if (container) container.innerHTML = buildEmprestimosList(filtered);
+      empMenu.querySelectorAll(".filter-option").forEach(o => o.classList.toggle("active", o === opt));
+      renderList();
     });
   });
   document.addEventListener("click", () => empMenu?.classList.remove("open"));
 
   document.getElementById("emp-export-btn")?.addEventListener("click", () => {
-    const headers = ["Produto", "Quantidade", "Data Início", "Hora Início", "Data Fim", "Hora Fim", "Status"];
-    const statusLabel = { pendente: "Pendente", agendado: "Agendado", "em-andamento": "Em andamento", concluido: "Concluído" };
-    const rows = empData.map(e => [
-      e.produto, e.quantidade,
-      formatDateBR(e.dataInicio), e.horaInicio,
-      formatDateBR(e.dataFim), e.horaFim,
-      statusLabel[e.status] || e.status
-    ]);
+    const statusLabel = { pendente:"Pendente", agendado:"Agendado", "em-andamento":"Em andamento", concluido:"Concluído", recusado:"Recusado" };
+    const headers = isAuxiliar
+      ? ["Produto","Quantidade","Professor","Data Início","Hora Início","Data Fim","Hora Fim","Status"]
+      : ["Produto","Quantidade","Data Início","Hora Início","Data Fim","Hora Fim","Status"];
+    const rows = empData.map(e => isAuxiliar
+      ? [e.produto, e.quantidade, e.professor||"", formatDateBR(e.dataInicio), e.horaInicio, formatDateBR(e.dataFim), e.horaFim, statusLabel[e.status]||e.status]
+      : [e.produto, e.quantidade, formatDateBR(e.dataInicio), e.horaInicio, formatDateBR(e.dataFim), e.horaFim, statusLabel[e.status]||e.status]
+    );
     exportCSV("emprestimos.csv", headers, rows);
   });
 
-  const bindEmpActions = () => {
-    document.querySelectorAll("[data-view-emp-id]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const e = empData.find(x => x.id === btn.dataset.viewEmpId);
-        if (!e) return;
-        showToast(`${e.produto} — ${formatDateBR(e.dataInicio)} ${e.horaInicio} até ${formatDateBR(e.dataFim)} ${e.horaFim}`);
-      });
-    });
+  bindEmpTableButtons(isAuxiliar);
+}
 
-    document.querySelectorAll("[data-delete-emp-id]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const e = empData.find(x => x.id === btn.dataset.deleteEmpId);
-        if (!e) return;
-        if (!confirm(`Tem certeza que deseja excluir o empréstimo de "${e.produto}"? Esta ação não poderá ser desfeita.`)) return;
-        const idx = appData.emprestimos.findIndex(x => x.id === e.id);
-        if (idx !== -1) appData.emprestimos.splice(idx, 1);
-        empData.splice(empData.indexOf(e), 1);
-        const container = document.getElementById("emp-list-container");
-        if (container) container.innerHTML = buildEmprestimosList(empData);
-        bindEmpActions();
-        showToast("Empréstimo excluído com sucesso.");
-      });
-    });
+function buildViewEmprestimoModal() {
+  return `
+    <div class="modal-overlay" id="view-emp-modal">
+      <div class="modal-card modal-card-wide">
+        <div class="modal-header">
+          <span class="modal-title" id="view-emp-titulo">Detalhes do Empréstimo</span>
+          <button class="modal-close" id="view-emp-close">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+        <div class="modal-body" id="view-emp-body"></div>
+        <div class="modal-footer" id="view-emp-footer">
+          <button class="btn btn-outline-secondary btn-pongo" id="view-emp-fechar">Fechar</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
 
-    document.querySelectorAll("[data-edit-emp-id]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const e = empData.find(x => x.id === btn.dataset.editEmpId);
-        if (e) showToast(`Edição de "${e.produto}" será disponibilizada em breve.`, "warning");
-      });
-    });
+function openViewEmprestimo(e, isAuxiliar) {
+  const statusMap = {
+    pendente:      { label: "Pendente",     cls: "emp-status-pendente",  icon: "schedule"       },
+    agendado:      { label: "Agendado",     cls: "emp-status-agendado",  icon: "event_available" },
+    "em-andamento":{ label: "Em andamento", cls: "emp-status-andamento", icon: "autorenew"       },
+    concluido:     { label: "Concluído",    cls: "emp-status-concluido", icon: "check_circle"    },
+    recusado:      { label: "Recusado",     cls: "emp-status-recusado",  icon: "cancel"          },
   };
+  const s = statusMap[e.status] || { label: e.status, cls: "", icon: "help" };
 
-  bindEmpActions();
+  document.getElementById("view-emp-titulo").textContent = `Empréstimo — ${e.produto}`;
+  document.getElementById("view-emp-body").innerHTML = `
+    <div class="doc-info-grid">
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Produto</span>
+        <span class="doc-info-value">${e.produto}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Quantidade</span>
+        <span class="doc-info-value">${e.quantidade}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Professor</span>
+        <span class="doc-info-value">${e.professor || "—"}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Status</span>
+        <span class="emp-status ${s.cls}" style="margin-top:2px">
+          <span class="material-symbols-rounded">${s.icon}</span>
+          ${s.label}
+        </span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Data / hora início</span>
+        <span class="doc-info-value">${formatDateBR(e.dataInicio)} às ${e.horaInicio}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Data / hora fim</span>
+        <span class="doc-info-value">${formatDateBR(e.dataFim)} às ${e.horaFim}</span>
+      </div>
+      ${e.observacoes ? `
+      <div class="doc-info-cell doc-info-cell--full">
+        <span class="doc-info-label">Observações</span>
+        <span class="doc-info-value">${e.observacoes}</span>
+      </div>` : ""}
+    </div>
+  `;
+
+  const footer = document.getElementById("view-emp-footer");
+  if (isAuxiliar && e.status === "pendente") {
+    footer.innerHTML = `
+      ${btnModalDanger({ id: "view-emp-recusar", label: "Recusar" })}
+      <div style="flex:1"></div>
+      ${btnModalCancel({ id: "view-emp-fechar", label: "Fechar" })}
+      ${btnModalConfirm({ id: "view-emp-aceitar", label: "Aceitar Empréstimo", icon: "check_circle" })}
+    `;
+  } else {
+    footer.innerHTML = `<button class="btn btn-outline-secondary btn-pongo" id="view-emp-fechar">Fechar</button>`;
+  }
+
+  const overlay = document.getElementById("view-emp-modal");
+  overlay?.classList.add("open");
+  overlay.onclick = ev => { if (ev.target === overlay) overlay.classList.remove("open"); };
+
+  const close = () => overlay?.classList.remove("open");
+  document.getElementById("view-emp-fechar").onclick = close;
+  document.getElementById("view-emp-close").onclick  = close;
+
+  if (isAuxiliar && e.status === "pendente") {
+    document.getElementById("view-emp-aceitar").onclick = () => {
+      showConfirmModal({
+        title:        "Aceitar Empréstimo",
+        message:      `Confirma o aceite do empréstimo de "${e.produto}" para ${e.professor || "o professor"}?`,
+        confirmLabel: "Aceitar",
+        confirmIcon:  "check_circle",
+        danger:       false,
+        onConfirm: () => {
+          e.status = "agendado";
+          close();
+          const container = document.getElementById("emp-list-container");
+          if (container) container.innerHTML = buildEmprestimosList(appData.emprestimos, true);
+          bindEmpTableButtons(true);
+          showToast("Empréstimo aceito com sucesso!");
+        },
+      });
+    };
+    document.getElementById("view-emp-recusar").onclick = () => {
+      showConfirmModal({
+        title:        "Recusar Empréstimo",
+        message:      `Tem certeza que deseja recusar o empréstimo de "${e.produto}" solicitado por ${e.professor || "o professor"}?`,
+        confirmLabel: "Recusar",
+        confirmIcon:  "cancel",
+        danger:       true,
+        onConfirm: () => {
+          e.status = "recusado";
+          close();
+          const container = document.getElementById("emp-list-container");
+          if (container) container.innerHTML = buildEmprestimosList(appData.emprestimos, true);
+          bindEmpTableButtons(true);
+          showToast("Empréstimo recusado.", "warning");
+        },
+      });
+    };
+  }
+}
+
+function bindEmpTableButtons(isAuxiliar) {
+  const empData = appData.emprestimos || [];
+
+  document.querySelectorAll("[data-view-emp-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const e = empData.find(x => x.id === btn.dataset.viewEmpId);
+      if (e) openViewEmprestimo(e, isAuxiliar);
+    });
+  });
+
+  if (isAuxiliar) {
+    document.querySelectorAll("[data-aceitar-emp-id]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const e = empData.find(x => x.id === btn.dataset.aceitarEmpId);
+        if (!e) return;
+        showConfirmModal({
+          title:        "Aceitar Empréstimo",
+          message:      `Confirma o aceite do empréstimo de "${e.produto}" para ${e.professor || "o professor"}?`,
+          confirmLabel: "Aceitar",
+          confirmIcon:  "check_circle",
+          danger:       false,
+          onConfirm: () => {
+            e.status = "agendado";
+            const container = document.getElementById("emp-list-container");
+            if (container) container.innerHTML = buildEmprestimosList(empData, true);
+            bindEmpTableButtons(true);
+            showToast("Empréstimo aceito com sucesso!");
+          },
+        });
+      });
+    });
+
+    document.querySelectorAll("[data-recusar-emp-id]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const e = empData.find(x => x.id === btn.dataset.recusarEmpId);
+        if (!e) return;
+        showConfirmModal({
+          title:        "Recusar Empréstimo",
+          message:      `Tem certeza que deseja recusar o empréstimo de "${e.produto}" solicitado por ${e.professor || "o professor"}?`,
+          confirmLabel: "Recusar",
+          confirmIcon:  "cancel",
+          danger:       true,
+          onConfirm: () => {
+            e.status = "recusado";
+            const container = document.getElementById("emp-list-container");
+            if (container) container.innerHTML = buildEmprestimosList(empData, true);
+            bindEmpTableButtons(true);
+            showToast("Empréstimo recusado.", "warning");
+          },
+        });
+      });
+    });
+    return;
+  }
+
+  // Professor: edit e delete
+  document.querySelectorAll("[data-edit-emp-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const e = empData.find(x => x.id === btn.dataset.editEmpId);
+      if (e) showToast(`Edição de "${e.produto}" será disponibilizada em breve.`, "warning");
+    });
+  });
+
+  document.querySelectorAll("[data-delete-emp-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const e = empData.find(x => x.id === btn.dataset.deleteEmpId);
+      if (!e) return;
+      showConfirmModal({
+        title:        "Excluir Empréstimo",
+        message:      `Tem certeza que deseja excluir a solicitação de "${e.produto}"?`,
+        confirmLabel: "Excluir",
+        confirmIcon:  "delete",
+        danger:       true,
+        onConfirm: () => {
+          const idx = appData.emprestimos.findIndex(x => x.id === e.id);
+          if (idx !== -1) appData.emprestimos.splice(idx, 1);
+          const container = document.getElementById("emp-list-container");
+          if (container) container.innerHTML = buildEmprestimosList(appData.emprestimos, false);
+          bindEmpTableButtons(false);
+          showToast("Empréstimo excluído com sucesso.");
+        },
+      });
+    });
+  });
 }
 
 function getFilteredProdutos() {
@@ -1247,7 +1654,7 @@ function buildProdutosTable(produtos, isAuxiliar) {
             ${p.nome}
           </td>
           <td>${p.categoria}</td>
-          <td>${p.quantidade}</td>
+          <td>${fmtQty(p)}</td>
           <td>${p.validade}</td>
           <td>
             <div class="localizacao-cell">
@@ -1308,9 +1715,9 @@ function buildProdutosTable(produtos, isAuxiliar) {
 function buildCriarProdutoModal(categorias) {
   return `
     <div class="modal-overlay" id="criar-produto-modal">
-      <div class="modal-card">
+      <div class="modal-card modal-card-wide">
         <div class="modal-header">
-          <span class="modal-title">Criar Produto</span>
+          <span class="modal-title" id="prod-modal-title">Novo Produto</span>
           <button class="modal-close" id="modal-close-btn">
             <span class="material-symbols-rounded">close</span>
           </button>
@@ -1319,25 +1726,25 @@ function buildCriarProdutoModal(categorias) {
         <div class="modal-body">
           <div class="modal-row">
             <div class="modal-field">
-              <label>Nome</label>
+              <label>Nome <span class="required-star">*</span></label>
               <input type="text" id="prod-nome" placeholder="Ex.: Ácido Clorídrico">
             </div>
             <div class="modal-field">
-              <label>Código</label>
+              <label>Código <span class="required-star">*</span></label>
               <input type="text" id="prod-codigo" placeholder="Ex.: 006">
             </div>
           </div>
 
           <div class="modal-row">
             <div class="modal-field">
-              <label>Categoria</label>
+              <label>Categoria <span class="required-star">*</span></label>
               <select id="prod-categoria">
                 <option value="">Selecione uma categoria...</option>
                 ${categorias.map(c => `<option value="${c.nome}">${c.nome}</option>`).join("")}
               </select>
             </div>
             <div class="modal-field">
-              <label>Unidade de Medida</label>
+              <label>Unidade de Medida <span class="required-star">*</span></label>
               <input type="text" id="prod-unidade" placeholder="Ex.: ml, g, unid.">
             </div>
           </div>
@@ -1345,6 +1752,30 @@ function buildCriarProdutoModal(categorias) {
           <div class="modal-field">
             <label>Localização</label>
             <input type="text" id="prod-localizacao" placeholder="Ex.: Armário A1">
+          </div>
+
+          <div class="modal-row" style="margin-top:4px">
+            <div class="modal-field">
+              <label>Ativo</label>
+              <label class="toggle">
+                <input type="checkbox" id="prod-ativo" checked>
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">Produto em uso</span>
+              </label>
+            </div>
+            <div class="modal-field">
+              <label>Controla Estoque</label>
+              <label class="toggle">
+                <input type="checkbox" id="prod-controla-estoque" checked>
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">Participar do controle de saldo</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="modal-field" id="prod-estoque-min-wrap">
+            <label>Estoque Mínimo</label>
+            <input type="number" id="prod-estoque-min" placeholder="Ex.: 100" min="0" step="1">
           </div>
         </div>
 
@@ -1363,7 +1794,7 @@ function buildCriarProdutoModal(categorias) {
 function buildViewProdutoModal() {
   return `
     <div class="modal-overlay" id="view-produto-modal">
-      <div class="modal-card">
+      <div class="modal-card modal-card-wide">
         <div class="modal-header">
           <span class="modal-title">Detalhes do Produto</span>
           <button class="modal-close" id="view-produto-close">
@@ -1387,8 +1818,18 @@ function buildViewProdutoModal() {
               <div class="view-field-value" id="view-prod-categoria"></div>
             </div>
             <div class="modal-field">
-              <label>Quantidade</label>
+              <label>Unidade de Medida</label>
+              <div class="view-field-value" id="view-prod-unidade"></div>
+            </div>
+          </div>
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Quantidade em Estoque</label>
               <div class="view-field-value" id="view-prod-quantidade"></div>
+            </div>
+            <div class="modal-field">
+              <label>Estoque Mínimo</label>
+              <div class="view-field-value" id="view-prod-estoque-min"></div>
             </div>
           </div>
           <div class="modal-row">
@@ -1407,8 +1848,8 @@ function buildViewProdutoModal() {
               <div id="view-prod-status"></div>
             </div>
             <div class="modal-field">
-              <label>Permite Empréstimo</label>
-              <div id="view-prod-emprestimo"></div>
+              <label>Controla Estoque</label>
+              <div id="view-prod-controla"></div>
             </div>
           </div>
         </div>
@@ -1435,20 +1876,21 @@ function bindTableButtons(isAuxiliar) {
     btn.addEventListener("click", () => {
       const p = localProdutos.find(x => x.id === btn.dataset.viewProdutoId);
       if (!p) return;
-      document.getElementById("view-prod-nome").textContent       = p.nome;
-      document.getElementById("view-prod-codigo").textContent     = p.codigo;
-      document.getElementById("view-prod-categoria").textContent  = p.categoria;
-      document.getElementById("view-prod-quantidade").textContent = p.quantidade;
-      document.getElementById("view-prod-validade").textContent   = p.validade;
-      document.getElementById("view-prod-localizacao").textContent= p.localizacao;
+      document.getElementById("view-prod-nome").textContent        = p.nome;
+      document.getElementById("view-prod-codigo").textContent      = p.codigo;
+      document.getElementById("view-prod-categoria").textContent   = p.categoria;
+      document.getElementById("view-prod-unidade").textContent     = p.unidadeMedida || "—";
+      document.getElementById("view-prod-quantidade").textContent  = fmtQty(p);
+      document.getElementById("view-prod-estoque-min").textContent =
+        p.controlaEstoque && p.estoqueMinimo ? `${p.estoqueMinimo} ${p.unidadeMedida || ""}`.trim() : "—";
+      document.getElementById("view-prod-validade").textContent    = p.validade;
+      document.getElementById("view-prod-localizacao").textContent = p.localizacao || "—";
       document.getElementById("view-prod-status").innerHTML =
         `<span class="status-pill ${p.status}">${statusLabels[p.status] || p.status}</span>`;
-      const cat = getLocalCategorias().find(c => c.nome === p.categoria);
-      const permiteEmp = cat?.permiteEmprestimo === true;
-      document.getElementById("view-prod-emprestimo").innerHTML =
-        permiteEmp
+      document.getElementById("view-prod-controla").innerHTML =
+        p.controlaEstoque
           ? `<span class="status-pill normal">Sim</span>`
-          : `<span class="status-pill estoque-baixo">Não</span>`;
+          : `<span class="status-pill muted">Não</span>`;
       document.getElementById("view-produto-modal").classList.add("open");
     });
   });
@@ -1474,11 +1916,16 @@ function bindTableButtons(isAuxiliar) {
 
       currentEditId = produto.id;
 
-      document.getElementById("prod-nome").value = produto.nome;
-      document.getElementById("prod-codigo").value = produto.codigo;
+      document.getElementById("prod-nome").value      = produto.nome;
+      document.getElementById("prod-codigo").value    = produto.codigo;
       document.getElementById("prod-categoria").value = produto.categoria;
-      document.getElementById("prod-unidade").value = produto.quantidade;
-      document.getElementById("prod-localizacao").value = produto.localizacao;
+      document.getElementById("prod-unidade").value   = produto.unidadeMedida || "";
+      document.getElementById("prod-localizacao").value = produto.localizacao || "";
+      document.getElementById("prod-ativo").checked            = produto.ativo !== false;
+      document.getElementById("prod-controla-estoque").checked = produto.controlaEstoque !== false;
+      document.getElementById("prod-estoque-min").value        = produto.estoqueMinimo || "";
+      document.getElementById("prod-estoque-min-wrap").style.display =
+        produto.controlaEstoque !== false ? "" : "none";
 
       document.querySelector("#criar-produto-modal .modal-title").textContent = "Editar Produto";
       document.getElementById("modal-save-btn").innerHTML =
@@ -1554,31 +2001,54 @@ function bindProdutosEvents(isAuxiliar) {
     if (e.target === e.currentTarget) closeModal();
   });
 
-  document.getElementById("modal-save-btn")?.addEventListener("click", () => {
-    const nome = document.getElementById("prod-nome").value.trim();
-    const codigo = document.getElementById("prod-codigo").value.trim();
-    const categoria = document.getElementById("prod-categoria").value;
-    const unidade = document.getElementById("prod-unidade").value.trim();
-    const localizacao = document.getElementById("prod-localizacao").value.trim();
+  // Toggle estoque mínimo ao mudar controlaEstoque
+  document.getElementById("prod-controla-estoque")?.addEventListener("change", e => {
+    document.getElementById("prod-estoque-min-wrap").style.display = e.target.checked ? "" : "none";
+  });
 
-    if (!nome || !codigo || !categoria || !unidade || !localizacao) return;
+  document.getElementById("modal-save-btn")?.addEventListener("click", () => {
+    const nome         = document.getElementById("prod-nome").value.trim();
+    const codigo       = document.getElementById("prod-codigo").value.trim();
+    const categoria    = document.getElementById("prod-categoria").value;
+    const unidade      = document.getElementById("prod-unidade").value.trim();
+    const localizacao  = document.getElementById("prod-localizacao").value.trim();
+    const ativo        = document.getElementById("prod-ativo").checked;
+    const controlaEst  = document.getElementById("prod-controla-estoque").checked;
+    const estoqueMin   = controlaEst
+      ? (parseInt(document.getElementById("prod-estoque-min").value, 10) || 0)
+      : 0;
+
+    if (!nome || !codigo || !categoria || !unidade) return;
 
     if (currentEditId) {
       const idx = localProdutos.findIndex(p => p.id === currentEditId);
       if (idx !== -1) {
-        localProdutos[idx] = { ...localProdutos[idx], nome, codigo, categoria, quantidade: unidade, localizacao };
+        localProdutos[idx] = {
+          ...localProdutos[idx],
+          nome, codigo, categoria,
+          unidadeMedida: unidade,
+          localizacao,
+          ativo,
+          controlaEstoque: controlaEst,
+          estoqueMinimo:   estoqueMin,
+        };
+        updateProdutoStatus(localProdutos[idx]);
       }
     } else {
-      localProdutos.push({
-        id: String(Date.now()),
-        codigo,
-        nome,
-        categoria,
-        quantidade: unidade,
-        validade: "—",
+      const novo = {
+        id:             String(Date.now()),
+        codigo, nome, categoria,
+        unidadeMedida:  unidade,
+        quantidade:     0,
+        estoqueMinimo:  estoqueMin,
+        validade:       "—",
         localizacao,
-        status: "normal"
-      });
+        status:         "normal",
+        ativo,
+        controlaEstoque: controlaEst,
+      };
+      updateProdutoStatus(novo);
+      localProdutos.push(novo);
     }
 
     closeModal();
@@ -1691,7 +2161,7 @@ function buildViewRoteiroModal() {
 }
 
 function buildRoteirosTable(roteiros) {
-  const isAuxiliar = currentUser.profile === "auxiliar";
+  const isProfessor = currentUser.profile === "professor";
 
   const rows = roteiros.length === 0
     ? `<tr class="table-empty-row"><td colspan="6">Nenhum roteiro encontrado.</td></tr>`
@@ -1729,7 +2199,7 @@ function buildRoteirosTable(roteiros) {
         <span class="list-card-title">Lista de Roteiros</span>
         <div style="display:flex;align-items:center;gap:12px">
           ${resultBadge(roteiros.length)}
-          ${isAuxiliar ? btnCreate({ id: "new-roteiro-btn", label: "Criar Roteiro" }) : ""}
+          ${isProfessor ? btnCreate({ id: "new-roteiro-btn", label: "Criar Roteiro" }) : ""}
         </div>
       </div>
       <div class="list-card-inner">
@@ -1772,7 +2242,7 @@ function buildCriarRoteiroModal() {
               <input type="text" id="rot-nome" placeholder="Ex: Titulação Ácido-Base">
             </div>
             <div class="modal-field">
-              <label>Categoria <span class="required-star">*</span></label>
+              <label>Categoria</label>
               <select id="rot-categoria">
                 <option value="">Selecione...</option>
                 ${categoriasDisciplina.map(c => `<option value="${c}">${c}</option>`).join("")}
@@ -2023,11 +2493,10 @@ function bindRoteirosEvents() {
     const horasEl    = document.getElementById("rot-horas");
     const minutosEl  = document.getElementById("rot-minutos");
 
-    [nomeEl, catEl, horasEl].forEach(el => el?.classList.remove("field-error"));
+    [nomeEl, horasEl].forEach(el => el?.classList.remove("field-error"));
 
     let valid = true;
     if (!nomeEl?.value.trim())    { nomeEl.classList.add("field-error");  valid = false; }
-    if (!catEl?.value)            { catEl.classList.add("field-error");   valid = false; }
     const horas = parseInt(horasEl?.value, 10);
     if (!horasEl?.value || isNaN(horas) || horas < 1) {
       horasEl?.classList.add("field-error"); valid = false;
@@ -2074,6 +2543,8 @@ const CAL_START = 7;
 const CAL_END = 22;
 const HOUR_PX = 64;
 let calWeekOffset = 0;
+let reservasWeekOffset = 0;
+let preparacaoChecks = {}; // { agendId: Set<itemIndex> }
 
 function renderMeusAgendamentos() {
   calWeekOffset = 0;
@@ -2417,17 +2888,28 @@ function bindCalendarEvents() {
   });
 
   document.getElementById("view-cancel-agend-btn")?.addEventListener("click", () => {
-    const card = document.getElementById("view-agend-card");
-    const isPendente = card?.dataset.mode === "edit";
+    const card  = document.getElementById("view-agend-card");
+    const agend = appData.agendamentos.find(a => a.id === card?.dataset.agendId);
+    if (!agend) return;
+
+    const isPendente = agend.status === "pendente";
     const msg = isPendente
-      ? "Este agendamento ainda está pendente e pode ser editado. Deseja cancelar o agendamento?"
-      : "Este agendamento já foi preparado pela equipe auxiliar. Deseja realmente cancelá-lo?";
-    if (confirm(msg)) {
-      const id = card?.dataset.agendId;
-      appData.agendamentos = appData.agendamentos.filter(a => a.id !== id);
-      closeViewModal();
-      refreshCalendar();
-    }
+      ? "Tem certeza que deseja cancelar este agendamento?"
+      : "Os materiais desta prática já foram preparados pela equipe auxiliar. Deseja realmente cancelar este agendamento?";
+
+    showConfirmModal({
+      title:        "Cancelar Agendamento",
+      message:      msg,
+      confirmLabel: "Confirmar Cancelamento",
+      confirmIcon:  "cancel",
+      danger:       true,
+      onConfirm: () => {
+        cancelarAgendamento(agend);
+        closeViewModal();
+        refreshCalendar();
+        showToast("Agendamento cancelado.", "warning");
+      },
+    });
   });
 
   document.getElementById("view-save-btn")?.addEventListener("click", () => {
@@ -2478,20 +2960,70 @@ function bindCalendarEvents() {
     });
     if (!valid) return;
 
-    appData.agendamentos.push({
-      id: String(Date.now()),
-      titulo: nomeEl.value.trim(),
-      roteiro: document.getElementById("agend-roteiro")?.value || "",
-      turma: document.getElementById("agend-turma")?.value.trim() || "",
-      observacoes: document.getElementById("agend-obs")?.value.trim() || "",
-      data: dataEl.value,
-      horaInicio: inicioEl.value,
-      horaFim: fimEl.value,
-      status: "pendente",
+    // Coletar materiais com controlaEstoque = true e verificar estoque
+    const matRows   = document.querySelectorAll("#agend-materiais-list .material-row");
+    const semEstoque = [];
+    matRows.forEach(row => {
+      const produtoId = row.dataset.produtoId || row.querySelector(".mat-select")?.value;
+      if (!produtoId) return;
+      const prod = (localProdutos || []).find(p => p.id === produtoId);
+      if (!prod || !prod.controlaEstoque) return;
+      if (prod.status === "estoque-baixo" || prod.status === "vencido") {
+        semEstoque.push(prod);
+      }
     });
 
-    document.getElementById("criar-agend-modal")?.classList.remove("open");
-    refreshCalendar();
+    const criarAgendamento = (gerarSolicitacao = false) => {
+      const agId = String(Date.now());
+      appData.agendamentos.push({
+        id:          agId,
+        titulo:      nomeEl.value.trim(),
+        roteiro:     document.getElementById("agend-roteiro")?.value || "",
+        turma:       document.getElementById("agend-turma")?.value.trim() || "",
+        observacoes: document.getElementById("agend-obs")?.value.trim() || "",
+        data:        dataEl.value,
+        horaInicio:  inicioEl.value,
+        horaFim:     fimEl.value,
+        status:      "pendente",
+      });
+
+      if (gerarSolicitacao) {
+        semEstoque.forEach(prod => {
+          criarSolicitacao({
+            produtoId:            prod.id,
+            produto:              prod.nome,
+            unidadeMedida:        prod.unidadeMedida || "",
+            quantidadeSolicitada: prod.estoqueMinimo || 0,
+            quantidadeDisponivel: prod.quantidade,
+            estoqueMinimo:        prod.estoqueMinimo || 0,
+            origem:               "professor",
+            solicitante:          currentUser.name,
+            agendamentoId:        agId,
+            observacoes:          `Solicitado via agendamento "${nomeEl.value.trim()}"`,
+          });
+        });
+      }
+
+      document.getElementById("criar-agend-modal")?.classList.remove("open");
+      refreshCalendar();
+    };
+
+    if (semEstoque.length > 0) {
+      const nomes = semEstoque.map(p => p.nome).join(", ");
+      showConfirmModal({
+        title:        "Estoque Insuficiente",
+        message:      `Um ou mais materiais necessários para esta prática não possuem quantidade suficiente em estoque (${nomes}). Deseja prosseguir com o agendamento e gerar uma solicitação de compra?`,
+        confirmLabel: "Prosseguir e Solicitar Compra",
+        confirmIcon:  "shopping_cart",
+        danger:       false,
+        onConfirm:    () => {
+          criarAgendamento(true);
+          showToast("Agendamento realizado com sucesso. Uma solicitação de compra foi encaminhada para análise da equipe auxiliar.");
+        },
+      });
+    } else {
+      criarAgendamento(false);
+    }
   });
 
   [document.getElementById("agend-nome"), document.getElementById("agend-data"),
@@ -2688,15 +3220,28 @@ function openVisualizarModal(id) {
   const agend = appData.agendamentos.find(a => a.id === id);
   if (!agend) return;
 
-  const isPendente = agend.status === "pendente";
+  // Auto-concluir se o horário já passou
+  autoConcludeAgendamento(agend);
+
+  const isPendente  = agend.status === "pendente";
+  const isPreparado = agend.status === "preparado";
+  const canEdit     = isPendente;
+  const canCancel   = isPendente || isPreparado;
+
   const card = document.getElementById("view-agend-card");
   if (card) {
     card.dataset.agendId = id;
-    card.dataset.mode = isPendente ? "edit" : "view";
+    card.dataset.mode    = canEdit ? "edit" : "view";
   }
 
+  const titleMap = {
+    pendente:   "Editar Agendamento",
+    preparado:  "Agendamento Preparado",
+    concluido:  "Agendamento Concluído",
+    cancelado:  "Agendamento Cancelado",
+  };
   document.getElementById("view-modal-title").textContent =
-    isPendente ? "Editar Agendamento" : "Visualizar Agendamento";
+    titleMap[agend.status] || "Visualizar Agendamento";
 
   const setVal = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val ?? ""; };
   setVal("view-agend-nome",    agend.titulo);
@@ -2710,18 +3255,19 @@ function openVisualizarModal(id) {
   ["view-agend-nome", "view-agend-data", "view-agend-inicio", "view-agend-fim",
    "view-agend-turma", "view-agend-obs"].forEach(fid => {
     const el = document.getElementById(fid);
-    if (el) el.readOnly = !isPendente;
+    if (el) el.readOnly = !canEdit;
   });
   const roteiroEl = document.getElementById("view-agend-roteiro");
-  if (roteiroEl) roteiroEl.disabled = !isPendente;
+  if (roteiroEl) roteiroEl.disabled = !canEdit;
 
   const addMatBtn = document.getElementById("view-add-mat-btn");
-  if (addMatBtn) addMatBtn.style.display = isPendente ? "" : "none";
+  if (addMatBtn) addMatBtn.style.display = canEdit ? "" : "none";
 
-  populateViewMateriais(agend.roteiro || "", !isPendente);
+  populateViewMateriais(agend.roteiro || "", !canEdit);
 
-  document.getElementById("view-close-btn").style.display = isPendente ? "none" : "";
-  document.getElementById("view-save-btn").style.display   = isPendente ? "" : "none";
+  document.getElementById("view-close-btn").style.display     = canEdit   ? "none" : "";
+  document.getElementById("view-save-btn").style.display       = canEdit   ? "" : "none";
+  document.getElementById("view-cancel-agend-btn").style.display = canCancel ? "" : "none";
 
   document.getElementById("view-agend-modal")?.classList.add("open");
 }
@@ -2732,20 +3278,657 @@ function bindCalEventClicks() {
   });
 }
 
+/* ================================================================
+   RESERVAS — visão do auxiliar (todas as reservas, read-only)
+   ================================================================ */
+
+const RESERVA_STATUS_MAP = {
+  pendente:  { label: "Pendente",  calCls: "yellow", icon: "schedule",     pillCls: "entrada-status-pendente"  },
+  preparado: { label: "Preparado", calCls: "blue",   icon: "inventory_2",  pillCls: "emp-status-andamento"     },
+  concluido: { label: "Concluído", calCls: "green",  icon: "check_circle", pillCls: "entrada-status-recebido"  },
+  cancelado: { label: "Cancelado", calCls: "red",    icon: "cancel",       pillCls: "entrada-status-cancelado" },
+};
+// Alias para dados legados com status "confirmado"
+const RESERVA_STATUS_ALIAS = { confirmado: RESERVA_STATUS_MAP.concluido };
+
+function renderReservas() {
+  reservasWeekOffset = 0;
+  document.getElementById("main-content").innerHTML = `
+    <div class="agend-page">
+      <h1 class="page-section-title">Agenda</h1>
+      <p class="page-section-sub">Visualize todos os agendamentos de práticas solicitados pelos professores.</p>
+      <div id="reservas-cal-container">${buildReservasCalSection()}</div>
+      ${buildViewReservaModal()}
+    </div>
+  `;
+  bindReservasEvents();
+}
+
+function buildReservasCalSection() {
+  const DAY_NAMES = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+  const days      = getWeekDays(reservasWeekOffset);
+  const todayStr  = toDateStr(new Date());
+  const agendamentos = appData.agendamentos || [];
+  const hours = Array.from({ length: CAL_END - CAL_START }, (_, i) => CAL_START + i);
+
+  const now    = new Date();
+  const nowTop = (now.getHours() - CAL_START) * HOUR_PX + (now.getMinutes() / 60) * HOUR_PX;
+  const showNow = reservasWeekOffset === 0 && now.getHours() >= CAL_START && now.getHours() < CAL_END;
+
+  const dayHeaders = days.map((d, i) => {
+    const isToday = toDateStr(d) === todayStr;
+    return `
+      <div class="cal-day-hdr">
+        <span class="cal-day-name">${DAY_NAMES[i]}</span>
+        <span class="cal-day-num${isToday ? " is-today" : ""}">${d.getDate().toString().padStart(2,"0")}</span>
+      </div>`;
+  }).join("");
+
+  const timeLabels = hours.map(h =>
+    `<div class="cal-hour-label" style="top:${(h - CAL_START) * HOUR_PX}px">${h.toString().padStart(2,"0")}:00</div>`
+  ).join("");
+
+  const dayCols = days.map(d => {
+    const dateStr = toDateStr(d);
+    const events  = agendamentos.filter(a => a.data === dateStr).map(evt => {
+      const [sh, sm] = evt.horaInicio.split(":").map(Number);
+      const [eh, em] = evt.horaFim.split(":").map(Number);
+      const top    = (sh - CAL_START) * HOUR_PX + (sm / 60) * HOUR_PX;
+      const height = (eh - sh) * HOUR_PX + ((em - sm) / 60) * HOUR_PX;
+      const si     = RESERVA_STATUS_MAP[evt.status] || RESERVA_STATUS_ALIAS[evt.status] || { calCls: "green", icon: "event" };
+      return `
+        <div class="cal-event cal-event-${si.calCls}" data-reserva-id="${evt.id}"
+             style="top:${top}px;height:${height}px;cursor:pointer">
+          <div class="cal-evt-hdr">
+            <span class="cal-evt-time">${evt.horaInicio} – ${evt.horaFim}</span>
+            <span class="material-symbols-rounded cal-evt-icon">${si.icon}</span>
+          </div>
+          <span class="cal-evt-title">${evt.titulo}</span>
+          <span class="cal-evt-turma">${evt.professor || evt.turma || ""}</span>
+        </div>`;
+    }).join("");
+    return `<div class="cal-day-col">${events}</div>`;
+  }).join("");
+
+  const nowLine = showNow ? `
+    <div class="cal-now-line" style="top:${nowTop}px;"></div>
+    <div class="cal-now-dot"  style="top:${nowTop}px;"></div>
+  ` : "";
+
+  const legendItems = Object.values(RESERVA_STATUS_MAP).map(si => `
+    <span class="res-legend-item">
+      <span class="res-legend-dot cal-event-${si.calCls}"></span>
+      ${si.label}
+    </span>`).join("");
+
+  return `
+    <div class="cal-card">
+      <div class="cal-toolbar">
+        <div class="cal-nav-group">
+          <span class="cal-label">Agenda da semana</span>
+          <button class="cal-nav-btn" id="res-prev"><span class="material-symbols-rounded">chevron_left</span></button>
+          <button class="cal-nav-btn" id="res-next"><span class="material-symbols-rounded">chevron_right</span></button>
+          <span class="cal-range">${formatWeekRange(days)}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div class="res-legend">${legendItems}</div>
+          ${resultBadge(agendamentos.length, "reserva(s)")}
+        </div>
+      </div>
+
+      <div class="cal-header-row">
+        <div class="cal-gutter"></div>
+        ${dayHeaders}
+      </div>
+
+      <div class="cal-body-wrap">
+        <div class="cal-body" style="height:${(CAL_END - CAL_START) * HOUR_PX}px">
+          <div class="cal-time-col">${timeLabels}</div>
+          ${dayCols}
+          ${nowLine}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildViewReservaModal() {
+  return `
+    <div class="modal-overlay" id="view-reserva-modal">
+      <div class="modal-card modal-card-wide">
+        <div class="modal-header">
+          <span class="modal-title" id="view-res-titulo">Reserva</span>
+          <button class="modal-close" id="view-res-close">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+        <div class="modal-body" id="view-res-body"></div>
+        <div class="modal-footer" id="view-res-footer">
+          <button class="btn btn-outline-secondary btn-pongo" id="view-res-fechar">Fechar</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildAgendInfoGrid(agend) {
+  const si = RESERVA_STATUS_MAP[agend.status] || RESERVA_STATUS_ALIAS[agend.status] || { label: agend.status, pillCls: "", icon: "event" };
+  return `
+    <div class="doc-info-grid">
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Professor</span>
+        <span class="doc-info-value">${agend.professor || "—"}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Turma</span>
+        <span class="doc-info-value">${agend.turma || "—"}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Data</span>
+        <span class="doc-info-value">${formatDateBR(agend.data)}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Horário</span>
+        <span class="doc-info-value">${agend.horaInicio} – ${agend.horaFim}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Roteiro</span>
+        <span class="doc-info-value">${agend.roteiro || "—"}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Status</span>
+        <span class="entrada-status ${si.pillCls}" style="margin-top:2px">
+          <span class="material-symbols-rounded" style="font-size:13px">${si.icon}</span>
+          ${si.label}
+        </span>
+      </div>
+      ${agend.observacoes ? `
+      <div class="doc-info-cell doc-info-cell--full">
+        <span class="doc-info-label">Observações</span>
+        <span class="doc-info-value">${agend.observacoes}</span>
+      </div>` : ""}
+    </div>`;
+}
+
+function openViewReserva(id) {
+  const agend = (appData.agendamentos || []).find(a => a.id === id);
+  if (!agend) return;
+
+  if (agend.status === "pendente") {
+    openPreparacaoModal(agend);
+  } else {
+    openReservaReadOnly(agend);
+  }
+}
+
+function openReservaReadOnly(agend) {
+  const canCancel = agend.status === "preparado";
+
+  document.getElementById("view-res-titulo").textContent = agend.titulo;
+  document.getElementById("view-res-body").innerHTML     = buildAgendInfoGrid(agend);
+  document.getElementById("view-res-footer").innerHTML   = canCancel
+    ? `${btnModalDanger({ id: "btn-cancelar-agend-aux", label: "Cancelar Agendamento" })}
+       <div style="flex:1"></div>
+       <button class="btn btn-outline-secondary btn-pongo" id="view-res-fechar">Fechar</button>`
+    : `<button class="btn btn-outline-secondary btn-pongo" id="view-res-fechar">Fechar</button>`;
+
+  const overlay = document.getElementById("view-reserva-modal");
+  overlay?.classList.add("open");
+  overlay.onclick = e => { if (e.target === overlay) overlay.classList.remove("open"); };
+
+  const close = () => overlay?.classList.remove("open");
+  document.getElementById("view-res-close").onclick  = close;
+  document.getElementById("view-res-fechar").onclick = close;
+
+  if (canCancel) {
+    document.getElementById("btn-cancelar-agend-aux")?.addEventListener("click", () => {
+      showConfirmModal({
+        title:        "Cancelar Agendamento",
+        message:      "Os materiais desta prática já foram preparados. Deseja realmente cancelar este agendamento?",
+        confirmLabel: "Confirmar Cancelamento",
+        confirmIcon:  "cancel",
+        danger:       true,
+        onConfirm: () => {
+          cancelarAgendamento(agend);
+          close();
+          refreshReservasCalendar();
+          showToast("Agendamento cancelado. O professor responsável foi notificado.", "warning");
+        },
+      });
+    });
+  }
+}
+
+function openPreparacaoModal(agend) {
+  // Busca materiais do roteiro vinculado
+  const roteiro  = (localRoteiros || []).find(r => r.titulo === agend.roteiro);
+  const materiais = roteiro?.materiais || [];
+  const checks    = preparacaoChecks[agend.id] || new Set();
+
+  const checklistHtml = materiais.length === 0
+    ? `<div class="materiais-empty-hint">Nenhum material cadastrado neste roteiro.</div>`
+    : materiais.map((mat, idx) => {
+        const prod = (localProdutos || []).find(p => p.id === mat.produtoId);
+        const nome = prod?.nome || mat.produtoId;
+        const dispNum  = prod?.quantidade ?? "—";
+        const dispUnit = prod?.unidadeMedida || "";
+        const checked  = checks.has(idx);
+        const insuf    = typeof dispNum === "number" && parseQty(mat.qty || "0").num > dispNum;
+        return `
+          <label class="checklist-item prep-item${insuf ? " prep-item--insuf" : ""}">
+            <input type="checkbox" class="prep-check" data-idx="${idx}" ${checked ? "checked" : ""}>
+            <span class="checklist-check-icon"></span>
+            <div class="checklist-item-body">
+              <span class="checklist-item-nome">${nome}</span>
+              <div class="prep-item-qtds">
+                <span class="prep-qtd-label">Necessário:</span>
+                <span class="checklist-item-qtd">${mat.qty || "—"}</span>
+              </div>
+            </div>
+          </label>`;
+      }).join("");
+
+  const total   = materiais.length;
+  const checked = checks.size;
+
+  document.getElementById("view-res-titulo").textContent = "Prática Pendente";
+  document.getElementById("view-res-body").innerHTML = `
+    ${buildAgendInfoGrid(agend)}
+    <div class="materiais-section" style="margin-top:16px">
+      <div class="materiais-hdr">
+        <span class="materiais-label">Checklist de preparação</span>
+        <span class="checklist-counter" id="prep-counter">${checked} / ${total} preparados</span>
+      </div>
+      <div class="checklist-list" id="prep-checklist">${checklistHtml}</div>
+    </div>
+  `;
+
+  document.getElementById("view-res-footer").innerHTML = `
+    ${btnModalDanger({ id: "btn-cancelar-agend-aux", label: "Cancelar Agendamento" })}
+    <div style="flex:1"></div>
+    <button class="btn btn-outline-secondary btn-pongo" id="view-res-fechar">Fechar</button>
+    <button class="btn btn-success btn-pongo fw-bold d-flex align-items-center gap-2" id="btn-concluir-prep">
+      <span class="material-symbols-rounded" style="font-size:17px">inventory_2</span>
+      Concluir Preparação
+    </button>
+  `;
+
+  const overlay = document.getElementById("view-reserva-modal");
+  overlay?.classList.add("open");
+  overlay.onclick = e => { if (e.target === overlay) overlay.classList.remove("open"); };
+
+  const close = () => overlay?.classList.remove("open");
+  document.getElementById("view-res-close").onclick  = close;
+  document.getElementById("view-res-fechar").onclick = close;
+
+  document.getElementById("btn-cancelar-agend-aux")?.addEventListener("click", () => {
+    showConfirmModal({
+      title:        "Cancelar Agendamento",
+      message:      "Tem certeza que deseja cancelar este agendamento?",
+      confirmLabel: "Confirmar Cancelamento",
+      confirmIcon:  "cancel",
+      danger:       true,
+      onConfirm: () => {
+        cancelarAgendamento(agend);
+        close();
+        refreshReservasCalendar();
+        showToast("Agendamento cancelado.", "warning");
+      },
+    });
+  });
+
+  // Persistir checks em tempo real
+  document.querySelectorAll(".prep-check").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const idx = parseInt(cb.dataset.idx, 10);
+      if (!preparacaoChecks[agend.id]) preparacaoChecks[agend.id] = new Set();
+      if (cb.checked) preparacaoChecks[agend.id].add(idx);
+      else            preparacaoChecks[agend.id].delete(idx);
+
+      const cur   = preparacaoChecks[agend.id].size;
+      const counter = document.getElementById("prep-counter");
+      if (counter) counter.textContent = `${cur} / ${total} preparados`;
+    });
+  });
+
+  // Concluir Preparação
+  document.getElementById("btn-concluir-prep")?.addEventListener("click", () => {
+    const cur = preparacaoChecks[agend.id]?.size || 0;
+    if (cur < total) {
+      showToast(`Marque todos os ${total} itens antes de concluir a preparação.`, "warning");
+      return;
+    }
+    showConfirmModal({
+      title:        "Concluir Preparação",
+      message:      "Todos os itens foram marcados como preparados. Deseja concluir a preparação deste agendamento? O professor responsável será notificado.",
+      confirmLabel: "Concluir Preparação",
+      confirmIcon:  "inventory_2",
+      danger:       false,
+      onConfirm: () => {
+        agend.status      = "preparado";
+        agend.preparadoPor = currentUser.name;
+        delete preparacaoChecks[agend.id];
+        close();
+        refreshReservasCalendar();
+        showToast("Preparação concluída com sucesso. O professor responsável foi notificado.");
+      },
+    });
+  });
+}
+
+function refreshReservasCalendar() {
+  const container = document.getElementById("reservas-cal-container");
+  if (container) {
+    container.innerHTML = buildReservasCalSection();
+    bindReservasNavEvents();
+    bindReservasEventClicks();
+  }
+}
+
+function bindReservasNavEvents() {
+  document.getElementById("res-prev")?.addEventListener("click", () => {
+    reservasWeekOffset--;
+    refreshReservasCalendar();
+  });
+  document.getElementById("res-next")?.addEventListener("click", () => {
+    reservasWeekOffset++;
+    refreshReservasCalendar();
+  });
+}
+
+function bindReservasEventClicks() {
+  document.querySelectorAll("[data-reserva-id]").forEach(el => {
+    el.addEventListener("click", () => openViewReserva(el.dataset.reservaId));
+  });
+}
+
+function bindReservasEvents() {
+  bindReservasNavEvents();
+  bindReservasEventClicks();
+}
+
+/* ================================================================
+   MOVIMENTAÇÕES DE ESTOQUE
+   ================================================================ */
+
+const MOV_TIPO_MAP = {
+  entrada:   { label: "Entrada",   icon: "add_circle",   color: "var(--green)",  cls: "mov-tipo-entrada"   },
+  saida:     { label: "Saída",     icon: "remove_circle", color: "var(--orange)", cls: "mov-tipo-saida"     },
+  compra:    { label: "Compra",    icon: "shopping_bag",  color: "var(--blue)",   cls: "mov-tipo-compra"    },
+  emprestimo:{ label: "Empréstimo",icon: "swap_horiz",    color: "var(--purple)", cls: "mov-tipo-emprestimo"},
+};
+
+const MOV_STATUS_MAP = {
+  confirmado:  { label: "Confirmado",   cls: "entrada-status-recebido"  },
+  pendente:    { label: "Pendente",     cls: "entrada-status-pendente"  },
+  "em-transito":{ label: "Em trânsito", cls: "emp-status-andamento"     },
+  "em-andamento":{ label: "Em andamento",cls: "emp-status-andamento"    },
+  agendado:    { label: "Agendado",     cls: "emp-status-agendado"      },
+  concluido:   { label: "Concluído",    cls: "entrada-status-recebido"  },
+  cancelado:   { label: "Cancelado",    cls: "entrada-status-cancelado" },
+};
+
+function renderMovimentacoes() {
+  movFilter = { search: "", tipo: "all" };
+
+  document.getElementById("main-content").innerHTML = `
+    <div class="agend-page">
+      <h1 class="page-section-title">Movimentações de Estoque</h1>
+      <p class="page-section-sub">Acompanhe todas as entradas, saídas, compras e empréstimos de materiais do laboratório.</p>
+      <div class="page-toolbar">
+        <label class="page-search">
+          <span class="material-symbols-rounded">search</span>
+          <input type="text" id="mov-search" placeholder="Buscar produto, responsável ou observação...">
+        </label>
+        <div class="filter-dropdown-wrap">
+          <button class="filter-btn" id="mov-tipo-btn">
+            <span class="material-symbols-rounded">filter_list</span>
+            Tipo
+            <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
+          </button>
+          <div class="filter-dropdown-menu" id="mov-tipo-menu">
+            <div class="filter-option active" data-mov-tipo="all">Todos</div>
+            <div class="filter-option" data-mov-tipo="entrada">Entrada</div>
+            <div class="filter-option" data-mov-tipo="saida">Saída</div>
+            <div class="filter-option" data-mov-tipo="compra">Compra</div>
+            <div class="filter-option" data-mov-tipo="emprestimo">Empréstimo</div>
+          </div>
+        </div>
+        <button class="export-btn-outline" id="mov-export-btn">
+          <span class="material-symbols-rounded">download</span>
+          Exportar
+        </button>
+      </div>
+      <div id="mov-table-container">
+        ${buildMovimentacoesList(localMovimentacoes || [])}
+      </div>
+      ${buildViewMovimentacaoModal()}
+    </div>
+  `;
+
+  bindMovimentacoesEvents();
+}
+
+function buildMovimentacoesList(items) {
+  const rows = items.length === 0
+    ? `<tr class="table-empty-row"><td colspan="7">Nenhuma movimentação encontrada.</td></tr>`
+    : items.map(m => {
+        const ti = MOV_TIPO_MAP[m.tipo]     || { label: m.tipo,   icon: "swap_horiz", color: "var(--muted)" };
+        const si = MOV_STATUS_MAP[m.status] || { label: m.status, cls: "" };
+        return `
+          <tr>
+            <td style="color:var(--muted);font-size:12px">${formatDateBR(m.data)}<br>${m.hora}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="material-symbols-rounded" style="font-size:16px;color:var(--purple)">science</span>
+                <div>
+                  <div style="font-weight:600">${m.produto}</div>
+                  <div style="font-size:11px;color:var(--muted)">${m.categoria}</div>
+                </div>
+              </div>
+            </td>
+            <td style="font-weight:600">${m.quantidade}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span class="material-symbols-rounded" style="font-size:18px;color:${ti.color}">${ti.icon}</span>
+                <span style="font-weight:600;color:${ti.color}">${ti.label}</span>
+              </div>
+            </td>
+            <td>
+              <span class="entrada-status ${si.cls}">${si.label}</span>
+            </td>
+            <td>${m.responsavel || `<span style="color:var(--muted)">—</span>`}</td>
+            <td>
+              <div class="action-cell">
+                <button class="action-icon-btn" title="Visualizar" data-view-mov-id="${m.id}">
+                  <span class="material-symbols-rounded">visibility</span>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+  return `
+    <div class="list-card">
+      <div class="list-card-header">
+        <span class="list-card-title">Histórico de Movimentações</span>
+        ${resultBadge(items.length)}
+      </div>
+      <div class="list-card-inner">
+        <div class="table-wrap">
+          <table class="produtos-table">
+            <thead>
+              <tr>
+                <th>Data / Hora</th>
+                <th>Produto</th>
+                <th>Quantidade</th>
+                <th>Tipo</th>
+                <th>Status</th>
+                <th>Responsável</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildViewMovimentacaoModal() {
+  return `
+    <div class="modal-overlay" id="view-mov-modal">
+      <div class="modal-card modal-card-wide">
+        <div class="modal-header">
+          <span class="modal-title" id="view-mov-titulo">Movimentação</span>
+          <button class="modal-close" id="view-mov-close">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+        <div class="modal-body" id="view-mov-body"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary btn-pongo" id="view-mov-fechar">Fechar</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function openViewMovimentacao(id) {
+  const m  = (localMovimentacoes || []).find(x => x.id === id);
+  if (!m) return;
+
+  const ti = MOV_TIPO_MAP[m.tipo]     || { label: m.tipo,   icon: "swap_horiz", color: "var(--muted)" };
+  const si = MOV_STATUS_MAP[m.status] || { label: m.status, cls: "" };
+
+  document.getElementById("view-mov-titulo").textContent = `${ti.label} — ${m.produto}`;
+  document.getElementById("view-mov-body").innerHTML = `
+    <div class="doc-info-grid">
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Produto</span>
+        <span class="doc-info-value">${m.produto}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Categoria</span>
+        <span class="doc-info-value">${m.categoria}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Quantidade</span>
+        <span class="doc-info-value">${m.quantidade}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Tipo</span>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+          <span class="material-symbols-rounded" style="font-size:18px;color:${ti.color}">${ti.icon}</span>
+          <span style="font-weight:700;color:${ti.color}">${ti.label}</span>
+        </div>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Data</span>
+        <span class="doc-info-value">${formatDateBR(m.data)} às ${m.hora}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Responsável</span>
+        <span class="doc-info-value">${m.responsavel || "—"}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Status</span>
+        <span class="entrada-status ${si.cls}" style="margin-top:2px">${si.label}</span>
+      </div>
+      <div class="doc-info-cell doc-info-cell--full">
+        <span class="doc-info-label">Observação</span>
+        <span class="doc-info-value">${m.observacao || "—"}</span>
+      </div>
+    </div>
+  `;
+
+  const overlay = document.getElementById("view-mov-modal");
+  overlay?.classList.add("open");
+  overlay.onclick = e => { if (e.target === overlay) overlay.classList.remove("open"); };
+
+  const close = () => overlay?.classList.remove("open");
+  document.getElementById("view-mov-close").onclick  = close;
+  document.getElementById("view-mov-fechar").onclick = close;
+}
+
+function refreshMovimentacoesList() {
+  const q    = (movFilter.search || "").toLowerCase();
+  const tipo = movFilter.tipo;
+  const filtered = (localMovimentacoes || []).filter(m => {
+    const matchTipo = tipo === "all" || m.tipo === tipo;
+    const matchQ    = !q || m.produto.toLowerCase().includes(q) ||
+      (m.responsavel || "").toLowerCase().includes(q) ||
+      (m.observacao  || "").toLowerCase().includes(q);
+    return matchTipo && matchQ;
+  });
+  const container = document.getElementById("mov-table-container");
+  if (container) container.innerHTML = buildMovimentacoesList(filtered);
+  bindMovViewButtons();
+}
+
+function bindMovViewButtons() {
+  document.querySelectorAll("[data-view-mov-id]").forEach(btn => {
+    btn.addEventListener("click", () => openViewMovimentacao(btn.dataset.viewMovId));
+  });
+}
+
+function bindMovimentacoesEvents() {
+  document.getElementById("mov-search")?.addEventListener("input", e => {
+    movFilter.search = e.target.value;
+    refreshMovimentacoesList();
+  });
+
+  bindMovViewButtons();
+
+  const btn  = document.getElementById("mov-tipo-btn");
+  const menu = document.getElementById("mov-tipo-menu");
+  btn?.addEventListener("click", e => { e.stopPropagation(); menu?.classList.toggle("open"); });
+  menu?.querySelectorAll("[data-mov-tipo]").forEach(opt => {
+    opt.addEventListener("click", () => {
+      menu.querySelectorAll(".filter-option").forEach(o => o.classList.remove("active"));
+      opt.classList.add("active");
+      movFilter.tipo = opt.dataset.movTipo;
+      btn.classList.toggle("active-filter", movFilter.tipo !== "all");
+      menu.classList.remove("open");
+      refreshMovimentacoesList();
+    });
+  });
+  document.addEventListener("click", e => {
+    if (!menu?.contains(e.target) && e.target !== btn) menu?.classList.remove("open");
+  });
+
+  document.getElementById("mov-export-btn")?.addEventListener("click", () => {
+    exportCSV("movimentacoes.csv",
+      ["Data", "Hora", "Produto", "Categoria", "Quantidade", "Tipo", "Status", "Responsável", "Observação"],
+      (localMovimentacoes || []).map(m => [
+        formatDateBR(m.data), m.hora, m.produto, m.categoria, m.quantidade,
+        MOV_TIPO_MAP[m.tipo]?.label || m.tipo,
+        MOV_STATUS_MAP[m.status]?.label || m.status,
+        m.responsavel || "", m.observacao || "",
+      ])
+    );
+  });
+}
+
 function renderCategorias() {
   getLocalCategorias();
   const isAuxiliar = currentUser.profile === "auxiliar";
 
   document.getElementById("main-content").innerHTML = `
-    <div class="categorias-page">
+    <div class="agend-page">
+      <h1 class="page-section-title">Categoria de Produtos</h1>
+      <p class="page-section-sub">Gerencie as categorias de materiais e configure as permissões de empréstimo.</p>
       <div class="page-toolbar">
         <label class="page-search">
           <span class="material-symbols-rounded">search</span>
           <input type="text" id="categorias-search" placeholder="Buscar categoria...">
         </label>
-        ${isAuxiliar ? `
-          ${btnCreate({ id: "new-categoria-btn", label: "Nova Categoria" })}
-        ` : ""}
+        <button class="export-btn-outline" id="categorias-export-btn">
+          <span class="material-symbols-rounded">download</span>
+          Exportar
+        </button>
       </div>
 
       <div id="categorias-table-container">
@@ -2796,7 +3979,10 @@ function buildCategoriasTable(categorias, isAuxiliar) {
     <div class="list-card">
       <div class="list-card-header">
         <span class="list-card-title">Categorias de Produtos</span>
-        ${resultBadge(categorias.length)}
+        <div style="display:flex;align-items:center;gap:12px">
+          ${resultBadge(categorias.length)}
+          ${isAuxiliar ? btnCreate({ id: "new-categoria-btn", label: "Nova Categoria" }) : ""}
+        </div>
       </div>
       <div class="list-card-inner">
         <div class="table-wrap">
@@ -2868,6 +4054,10 @@ function refreshCategoriasTable(isAuxiliar) {
 }
 
 function bindCategoriaTableButtons(isAuxiliar) {
+  document.getElementById("new-categoria-btn")?.addEventListener("click", () => {
+    document.getElementById("criar-categoria-modal").classList.add("open");
+  });
+
   document.querySelectorAll("[data-delete-cat-id]").forEach(btn => {
     btn.addEventListener("click", () => {
       localCategorias = localCategorias.filter(c => c.id !== btn.dataset.deleteCatId);
@@ -2915,8 +4105,11 @@ function bindCategoriasEvents(isAuxiliar) {
     resetCatModal();
   };
 
-  document.getElementById("new-categoria-btn")?.addEventListener("click", () => {
-    document.getElementById("criar-categoria-modal").classList.add("open");
+  document.getElementById("categorias-export-btn")?.addEventListener("click", () => {
+    exportCSV("categorias.csv",
+      ["Categoria", "Permite Empréstimo"],
+      localCategorias.map(c => [c.nome, c.permiteEmprestimo ? "Sim" : "Não"])
+    );
   });
 
   document.getElementById("cat-modal-close-btn")?.addEventListener("click", closeCatModal);
@@ -3181,6 +4374,1026 @@ function showPerfilFeedback(el, type, msg) {
   el.textContent = msg;
   el.className = `perfil-feedback perfil-feedback-${type}`;
   setTimeout(() => { el.textContent = ""; el.className = "perfil-feedback"; }, 3500);
+}
+
+/* ================================================================
+   ENTRADAS DE MATERIAIS — documentos de recebimento multi-item
+   ================================================================ */
+
+let currentEntradaDocId = null;
+
+function gerarCodigoEntrada() {
+  const ano = new Date().getFullYear();
+  const seq = String((localEntradas || []).length + 1).padStart(3, "0");
+  return `REC-${ano}-${seq}`;
+}
+
+function getEntradaStatusInfo(status) {
+  return ({
+    recebido:  { label: "Recebido",  cls: "entrada-status-recebido",  icon: "check_circle" },
+    pendente:  { label: "Pendente",  cls: "entrada-status-pendente",  icon: "schedule"     },
+    cancelado: { label: "Cancelado", cls: "entrada-status-cancelado", icon: "cancel"       },
+  })[status] || { label: status, cls: "", icon: "help" };
+}
+
+function renderEntradas() {
+  entradasFilter = { search: "", status: "all" };
+
+  document.getElementById("main-content").innerHTML = `
+    <div class="agend-page">
+      <h1 class="page-section-title">Entradas de Materiais</h1>
+      <p class="page-section-sub">Gerencie documentos de recebimento de materiais e insumos no estoque do laboratório.</p>
+      <div class="page-toolbar">
+        <label class="page-search">
+          <span class="material-symbols-rounded">search</span>
+          <input type="text" id="entradas-search" placeholder="Buscar por código, NF ou fornecedor...">
+        </label>
+        <div class="filter-dropdown-wrap">
+          <button class="filter-btn" id="entradas-status-filter-btn">
+            <span class="material-symbols-rounded">filter_list</span>
+            Filtrar status
+            <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
+          </button>
+          <div class="filter-dropdown-menu" id="entradas-status-filter-menu">
+            <div class="filter-option active" data-ent-status="all">Todos</div>
+            <div class="filter-option" data-ent-status="pendente">Pendente</div>
+            <div class="filter-option" data-ent-status="recebido">Recebido</div>
+            <div class="filter-option" data-ent-status="cancelado">Cancelado</div>
+          </div>
+        </div>
+        <button class="export-btn-outline" id="entradas-export-btn">
+          <span class="material-symbols-rounded">download</span>
+          Exportar
+        </button>
+      </div>
+      <div id="entradas-table-container">
+        ${buildEntradasList(localEntradas || [])}
+      </div>
+      ${buildCriarDocumentoModal()}
+      ${buildVerDocumentoModal()}
+    </div>
+  `;
+
+  bindEntradasEvents();
+}
+
+function buildEntradasList(docs) {
+  const rows = docs.length === 0
+    ? `<tr class="table-empty-row"><td colspan="7">Nenhum documento de entrada registrado.</td></tr>`
+    : docs.map(doc => {
+        const si      = getEntradaStatusInfo(doc.status);
+        const idLabel = doc.notaFiscal ? `NF ${doc.notaFiscal}` : doc.codigo;
+        const isPend  = doc.status === "pendente";
+        return `
+          <tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="material-symbols-rounded" style="font-size:17px;color:var(--purple)">receipt_long</span>
+                <span style="font-weight:600">${idLabel}</span>
+              </div>
+            </td>
+            <td>${doc.fornecedor || `<span style="color:var(--muted)">—</span>`}</td>
+            <td>${formatDateBR(doc.dataEntrada)}</td>
+            <td>${doc.responsavel || `<span style="color:var(--muted)">—</span>`}</td>
+            <td>${(doc.itens || []).length} item(ns)</td>
+            <td>
+              <span class="entrada-status ${si.cls}">
+                <span class="material-symbols-rounded" style="font-size:13px">${si.icon}</span>
+                ${si.label}
+              </span>
+            </td>
+            <td>
+              <div class="action-cell">
+                <button class="action-icon-btn" title="Visualizar" data-view-doc-id="${doc.id}">
+                  <span class="material-symbols-rounded">visibility</span>
+                </button>
+                ${isPend ? `
+                <button class="action-icon-btn" title="Editar" data-edit-doc-id="${doc.id}">
+                  <span class="material-symbols-rounded">edit</span>
+                </button>` : ""}
+                ${doc.status === "cancelado" ? `
+                <button class="action-icon-btn delete" title="Excluir" data-delete-doc-id="${doc.id}">
+                  <span class="material-symbols-rounded">delete</span>
+                </button>` : ""}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+  return `
+    <div class="list-card">
+      <div class="list-card-header">
+        <span class="list-card-title">Documentos de Entrada</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          ${resultBadge(docs.length)}
+          ${btnCreate({ id: "new-entrada-btn", label: "Nova Entrada", icon: "add_box" })}
+        </div>
+      </div>
+      <div class="list-card-inner">
+        <div class="table-wrap">
+          <table class="produtos-table">
+            <thead>
+              <tr>
+                <th>Código / NF</th>
+                <th>Fornecedor</th>
+                <th>Data</th>
+                <th>Responsável</th>
+                <th>Itens</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildCriarDocumentoModal() {
+  const produtos = localProdutos || [];
+  return `
+    <div class="modal-overlay" id="criar-documento-modal">
+      <div class="modal-card modal-card-wide">
+        <div class="modal-header">
+          <span class="modal-title">Novo Documento de Entrada</span>
+          <button class="modal-close" id="criar-doc-close">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+
+          <div class="modal-field" style="margin-bottom:4px">
+            <label>Identificador <span class="required-star">*</span></label>
+            <div class="doc-id-toggle">
+              <button class="doc-id-btn active" id="doc-tipo-codigo" type="button">Código do sistema</button>
+              <button class="doc-id-btn" id="doc-tipo-nf" type="button">Nota Fiscal</button>
+            </div>
+          </div>
+
+          <div class="modal-row">
+            <div class="modal-field" id="doc-codigo-wrap">
+              <label>Código gerado</label>
+              <input type="text" id="doc-codigo" readonly style="background:#f8f9ff;color:var(--muted);cursor:default">
+            </div>
+            <div class="modal-field" id="doc-nf-wrap" style="display:none">
+              <label>Número da NF <span class="required-star">*</span></label>
+              <input type="text" id="doc-nf" placeholder="Ex: 45821">
+            </div>
+            <div class="modal-field">
+              <label>Fornecedor</label>
+              <input type="text" id="doc-fornecedor" placeholder="Nome do fornecedor">
+            </div>
+          </div>
+
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Data de Entrada <span class="required-star">*</span></label>
+              <input type="date" id="doc-data">
+            </div>
+            <div class="modal-field">
+              <label>Observações</label>
+              <input type="text" id="doc-obs" placeholder="Informações adicionais...">
+            </div>
+          </div>
+
+          <div class="materiais-section" style="margin-top:8px">
+            <div class="materiais-hdr">
+              <span class="materiais-label">Itens do documento <span class="required-star">*</span></span>
+              <button class="add-mat-btn" id="doc-add-item-btn" type="button">
+                <span class="material-symbols-rounded">add</span>
+                Adicionar item
+              </button>
+            </div>
+            <div id="doc-itens-list">
+              <div class="materiais-empty-hint" id="doc-itens-empty">Clique em Adicionar item para incluir produtos.</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          ${btnModalCancel({ id: "criar-doc-cancel" })}
+          ${btnModalConfirm({ id: "criar-doc-save", label: "Salvar como Pendente", icon: "save" })}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildVerDocumentoModal() {
+  return `
+    <div class="modal-overlay" id="ver-documento-modal">
+      <div class="modal-card modal-card-wide">
+        <div class="modal-header">
+          <span class="modal-title" id="ver-doc-title">Documento</span>
+          <button class="modal-close" id="ver-doc-close">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+        <div class="modal-body" id="ver-doc-body"></div>
+        <div class="modal-footer" id="ver-doc-footer"></div>
+      </div>
+    </div>
+  `;
+}
+
+function openVerDocumento(docId) {
+  const doc = (localEntradas || []).find(d => d.id === docId);
+  if (!doc) return;
+  currentEntradaDocId = docId;
+
+  const si      = getEntradaStatusInfo(doc.status);
+  const idLabel = doc.notaFiscal ? `NF ${doc.notaFiscal}` : doc.codigo;
+  const isPend  = doc.status === "pendente";
+
+  const totalItens   = (doc.itens || []).length;
+  const recebidos    = (doc.itens || []).filter(i => i.recebido).length;
+
+  const itensHtml = (doc.itens || []).map((item, idx) => `
+    <label class="checklist-item${!isPend ? " checklist-item--disabled" : ""}">
+      <input type="checkbox" class="doc-item-check" data-idx="${idx}"
+        ${item.recebido ? "checked" : ""}
+        ${!isPend       ? "disabled" : ""}>
+      <span class="checklist-check-icon"></span>
+      <div class="checklist-item-body">
+        <span class="checklist-item-nome">${item.produto}</span>
+        <span class="checklist-item-qtd">${item.quantidade}</span>
+      </div>
+    </label>
+  `).join("");
+
+  document.getElementById("ver-doc-title").textContent = `Documento ${idLabel}`;
+
+  document.getElementById("ver-doc-body").innerHTML = `
+    <div class="doc-info-grid">
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Identificador</span>
+        <span class="doc-info-value">${idLabel}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Fornecedor</span>
+        <span class="doc-info-value">${doc.fornecedor || "—"}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Data de Entrada</span>
+        <span class="doc-info-value">${formatDateBR(doc.dataEntrada)}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Status</span>
+        <span class="entrada-status ${si.cls}">
+          <span class="material-symbols-rounded" style="font-size:13px">${si.icon}</span>
+          ${si.label}
+        </span>
+      </div>
+      ${doc.observacao ? `
+      <div class="doc-info-cell doc-info-cell--full">
+        <span class="doc-info-label">Observações</span>
+        <span class="doc-info-value">${doc.observacao}</span>
+      </div>` : ""}
+    </div>
+
+    <div class="materiais-section" style="margin-top:16px">
+      <div class="materiais-hdr">
+        <span class="materiais-label">Checklist de itens</span>
+        <span class="checklist-counter" id="checklist-counter">${recebidos} / ${totalItens} recebidos</span>
+      </div>
+      <div class="checklist-list">
+        ${itensHtml || `<div class="materiais-empty-hint">Nenhum item neste documento.</div>`}
+      </div>
+    </div>
+  `;
+
+  const footer = document.getElementById("ver-doc-footer");
+  if (doc.status === "pendente") {
+    footer.innerHTML =
+      `${btnModalDanger({ id: "ver-doc-cancelar", label: "Cancelar entrada" })}
+       <div style="flex:1"></div>
+       ${btnModalConfirm({ id: "ver-doc-concluir", label: "Concluir Recebimento", icon: "check_circle" })}`;
+  } else if (doc.status === "recebido") {
+    footer.innerHTML =
+      `${btnModalDanger({ id: "ver-doc-cancelar", label: "Cancelar e estornar estoque" })}
+       <div style="flex:1"></div>
+       ${btnModalCancel({ id: "ver-doc-fechar", label: "Fechar" })}`;
+  } else {
+    footer.innerHTML = btnModalCancel({ id: "ver-doc-fechar", label: "Fechar" });
+  }
+
+  document.getElementById("ver-documento-modal")?.classList.add("open");
+  bindVerDocumentoEvents(doc);
+}
+
+function bindVerDocumentoEvents(doc) {
+  const overlay = document.getElementById("ver-documento-modal");
+
+  overlay?.addEventListener("click", e => {
+    if (e.target === e.currentTarget) overlay.classList.remove("open");
+  }, { once: true });
+
+  document.getElementById("ver-doc-close")?.addEventListener("click", () => {
+    overlay?.classList.remove("open");
+  });
+
+  // Live checklist update
+  document.querySelectorAll(".doc-item-check").forEach(cb => {
+    cb.addEventListener("change", () => {
+      doc.itens[parseInt(cb.dataset.idx, 10)].recebido = cb.checked;
+      const total    = doc.itens.length;
+      const checked  = doc.itens.filter(i => i.recebido).length;
+      const counter  = document.getElementById("checklist-counter");
+      if (counter) counter.textContent = `${checked} / ${total} recebidos`;
+    });
+  });
+
+  if (doc.status === "pendente") {
+    document.getElementById("ver-doc-concluir")?.addEventListener("click", () => {
+      showConfirmModal({
+        title:         "Confirmar Recebimento",
+        message:       "Os itens selecionados serão adicionados ao estoque. Deseja confirmar o recebimento?",
+        confirmLabel:  "Confirmar Recebimento",
+        confirmIcon:   "check_circle",
+        danger:        false,
+        onConfirm: () => {
+          doc.itens.forEach(i => { i.recebido = true; addItemToStock(i); });
+          doc.status = "recebido";
+          overlay?.classList.remove("open");
+          refreshEntradasList();
+          showToast("Entrada recebida com sucesso. Os itens foram adicionados ao estoque.");
+        },
+      });
+    });
+
+    document.getElementById("ver-doc-cancelar")?.addEventListener("click", () => {
+      showConfirmModal({
+        title:        "Cancelar Entrada",
+        message:      "Tem certeza que deseja cancelar esta entrada?",
+        confirmLabel: "Cancelar Entrada",
+        confirmIcon:  "cancel",
+        danger:       true,
+        onConfirm: () => {
+          doc.status = "cancelado";
+          overlay?.classList.remove("open");
+          refreshEntradasList();
+          showToast("Entrada cancelada com sucesso.", "warning");
+        },
+      });
+    });
+
+  } else if (doc.status === "recebido") {
+    document.getElementById("ver-doc-cancelar")?.addEventListener("click", () => {
+      showConfirmModal({
+        title:        "Cancelar Entrada Recebida",
+        message:      "Esta entrada já foi recebida e os itens foram adicionados ao estoque. Ao cancelar o documento, o estoque será movimentado para remover os itens recebidos. Deseja continuar?",
+        confirmLabel: "Sim, cancelar e estornar",
+        confirmIcon:  "undo",
+        danger:       true,
+        onConfirm: () => {
+          doc.itens.filter(i => i.recebido).forEach(i => removeItemFromStock(i));
+          doc.status = "cancelado";
+          overlay?.classList.remove("open");
+          refreshEntradasList();
+          showToast("Entrada cancelada com sucesso. O estoque foi atualizado para remover os itens recebidos.", "warning");
+        },
+      });
+    });
+
+    document.getElementById("ver-doc-fechar")?.addEventListener("click", () => {
+      overlay?.classList.remove("open");
+    });
+
+  } else {
+    document.getElementById("ver-doc-fechar")?.addEventListener("click", () => {
+      overlay?.classList.remove("open");
+    });
+  }
+}
+
+function addDocItemRow() {
+  const list  = document.getElementById("doc-itens-list");
+  const empty = document.getElementById("doc-itens-empty");
+  if (empty) empty.remove();
+
+  const produtos = localProdutos || [];
+  const row = document.createElement("div");
+  row.className = "doc-item-row";
+  row.innerHTML = `
+    <select class="doc-item-select">
+      <option value="">Produto...</option>
+      ${produtos.map(p => `<option value="${p.id}" data-nome="${p.nome}">${p.nome}</option>`).join("")}
+    </select>
+    <input type="text" class="doc-item-qty" placeholder="Quantidade (ex: 500 ml)">
+    <button type="button" class="doc-item-remove" title="Remover">
+      <span class="material-symbols-rounded">close</span>
+    </button>
+  `;
+  row.querySelector(".doc-item-remove").addEventListener("click", () => {
+    row.remove();
+    if (!list.querySelector(".doc-item-row")) {
+      list.innerHTML = `<div class="materiais-empty-hint" id="doc-itens-empty">Clique em Adicionar item para incluir produtos.</div>`;
+    }
+  });
+  list.appendChild(row);
+}
+
+function collectDocItens() {
+  const itens = [];
+  document.querySelectorAll(".doc-item-row").forEach(row => {
+    const sel  = row.querySelector(".doc-item-select");
+    const qty  = row.querySelector(".doc-item-qty");
+    if (sel?.value) {
+      const nome = sel.options[sel.selectedIndex]?.dataset.nome || sel.value;
+      itens.push({ produtoId: sel.value, produto: nome, quantidade: qty?.value.trim() || "", recebido: false });
+    }
+  });
+  return itens;
+}
+
+function refreshEntradasList() {
+  const q      = (entradasFilter.search || "").toLowerCase();
+  const status = entradasFilter.status || "all";
+  const filtered = (localEntradas || []).filter(doc => {
+    const matchStatus = status === "all" || doc.status === status;
+    const hay = `${doc.codigo} ${doc.notaFiscal || ""} ${doc.fornecedor || ""}`.toLowerCase();
+    return matchStatus && (!q || hay.includes(q));
+  });
+  const container = document.getElementById("entradas-table-container");
+  if (container) container.innerHTML = buildEntradasList(filtered);
+  bindEntradasTableButtons();
+}
+
+function bindEntradasTableButtons() {
+  document.getElementById("new-entrada-btn")?.addEventListener("click", () => {
+    currentEditEntradaDocId = null;
+    resetCriarDocModal();
+    document.querySelector("#criar-documento-modal .modal-title").textContent = "Novo Documento de Entrada";
+    document.getElementById("criar-doc-save").innerHTML =
+      `<span class="material-symbols-rounded" style="font-size:17px">save</span> Salvar como Pendente`;
+    document.getElementById("criar-documento-modal")?.classList.add("open");
+  });
+
+  document.querySelectorAll("[data-view-doc-id]").forEach(btn => {
+    btn.addEventListener("click", () => openVerDocumento(btn.dataset.viewDocId));
+  });
+
+  document.querySelectorAll("[data-edit-doc-id]").forEach(btn => {
+    btn.addEventListener("click", () => openEditDocumento(btn.dataset.editDocId));
+  });
+
+  document.querySelectorAll("[data-delete-doc-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      showConfirmModal({
+        title:        "Excluir Documento",
+        message:      "Deseja excluir permanentemente este documento cancelado? Esta ação não pode ser desfeita.",
+        confirmLabel: "Excluir",
+        confirmIcon:  "delete",
+        danger:       true,
+        onConfirm: () => {
+          localEntradas = (localEntradas || []).filter(d => d.id !== btn.dataset.deleteDocId);
+          refreshEntradasList();
+          showToast("Documento excluído.", "warning");
+        },
+      });
+    });
+  });
+}
+
+function resetCriarDocModal() {
+  ["doc-nf", "doc-fornecedor", "doc-obs"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ""; el.classList.remove("field-error"); }
+  });
+  const dataEl = document.getElementById("doc-data");
+  if (dataEl) { dataEl.value = ""; dataEl.classList.remove("field-error"); }
+  document.getElementById("doc-codigo").value = gerarCodigoEntrada();
+
+  // Reset identifier toggle para "Código do sistema"
+  document.querySelectorAll(".doc-id-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("doc-tipo-codigo")?.classList.add("active");
+  document.getElementById("doc-codigo-wrap").style.display = "";
+  document.getElementById("doc-nf-wrap").style.display     = "none";
+
+  const list = document.getElementById("doc-itens-list");
+  if (list) list.innerHTML = `<div class="materiais-empty-hint" id="doc-itens-empty">Clique em Adicionar item para incluir produtos.</div>`;
+}
+
+function openEditDocumento(docId) {
+  const doc = (localEntradas || []).find(d => d.id === docId);
+  if (!doc || doc.status !== "pendente") return;
+
+  currentEditEntradaDocId = docId;
+  resetCriarDocModal();
+
+  document.querySelector("#criar-documento-modal .modal-title").textContent = "Editar Documento";
+  document.getElementById("criar-doc-save").innerHTML =
+    `<span class="material-symbols-rounded" style="font-size:17px">save</span> Salvar Alterações`;
+
+  // Preenche identificador
+  if (doc.notaFiscal) {
+    document.getElementById("doc-tipo-nf")?.click();
+    document.getElementById("doc-nf").value = doc.notaFiscal;
+  } else {
+    document.getElementById("doc-codigo").value = doc.codigo;
+  }
+
+  document.getElementById("doc-fornecedor").value = doc.fornecedor || "";
+  document.getElementById("doc-data").value        = doc.dataEntrada;
+  document.getElementById("doc-obs").value         = doc.observacao || "";
+
+  // Preenche itens
+  const list = document.getElementById("doc-itens-list");
+  list.innerHTML = "";
+  (doc.itens || []).forEach(item => {
+    addDocItemRow();
+    const rows   = list.querySelectorAll(".doc-item-row");
+    const lastRow = rows[rows.length - 1];
+    const sel = lastRow.querySelector(".doc-item-select");
+    const qty = lastRow.querySelector(".doc-item-qty");
+    if (sel) sel.value = item.produtoId;
+    if (qty) qty.value = item.quantidade;
+  });
+
+  document.getElementById("criar-documento-modal")?.classList.add("open");
+}
+
+function bindEntradasEvents() {
+  document.getElementById("entradas-search")?.addEventListener("input", e => {
+    entradasFilter.search = e.target.value;
+    refreshEntradasList();
+  });
+
+  const filterBtn  = document.getElementById("entradas-status-filter-btn");
+  const filterMenu = document.getElementById("entradas-status-filter-menu");
+  filterBtn?.addEventListener("click", e => {
+    e.stopPropagation();
+    filterMenu?.classList.toggle("open");
+  });
+  filterMenu?.querySelectorAll("[data-ent-status]").forEach(opt => {
+    opt.addEventListener("click", () => {
+      filterMenu.querySelectorAll(".filter-option").forEach(o => o.classList.remove("active"));
+      opt.classList.add("active");
+      entradasFilter.status = opt.dataset.entStatus;
+      filterBtn.classList.toggle("active-filter", entradasFilter.status !== "all");
+      filterMenu.classList.remove("open");
+      refreshEntradasList();
+    });
+  });
+  document.addEventListener("click", e => {
+    if (!filterMenu?.contains(e.target) && e.target !== filterBtn) filterMenu?.classList.remove("open");
+  });
+
+  document.getElementById("entradas-export-btn")?.addEventListener("click", () => {
+    const rows = [];
+    (localEntradas || []).forEach(doc => {
+      const id = doc.notaFiscal ? `NF ${doc.notaFiscal}` : doc.codigo;
+      (doc.itens || []).forEach(item => {
+        rows.push([id, doc.fornecedor || "", formatDateBR(doc.dataEntrada), item.produto, item.quantidade, getEntradaStatusInfo(doc.status).label]);
+      });
+    });
+    exportCSV("entradas.csv", ["Código/NF", "Fornecedor", "Data", "Produto", "Quantidade", "Status"], rows);
+  });
+
+  bindEntradasTableButtons();
+
+  // Identifier type toggle
+  document.getElementById("doc-tipo-codigo")?.addEventListener("click", () => {
+    document.querySelectorAll(".doc-id-btn").forEach(b => b.classList.remove("active"));
+    document.getElementById("doc-tipo-codigo").classList.add("active");
+    document.getElementById("doc-codigo-wrap").style.display = "";
+    document.getElementById("doc-nf-wrap").style.display     = "none";
+    document.getElementById("doc-nf")?.classList.remove("field-error");
+  });
+  document.getElementById("doc-tipo-nf")?.addEventListener("click", () => {
+    document.querySelectorAll(".doc-id-btn").forEach(b => b.classList.remove("active"));
+    document.getElementById("doc-tipo-nf").classList.add("active");
+    document.getElementById("doc-codigo-wrap").style.display = "none";
+    document.getElementById("doc-nf-wrap").style.display     = "";
+  });
+
+  document.getElementById("doc-add-item-btn")?.addEventListener("click", addDocItemRow);
+
+  document.getElementById("criar-doc-close")?.addEventListener("click", () => {
+    document.getElementById("criar-documento-modal")?.classList.remove("open");
+  });
+  document.getElementById("criar-doc-cancel")?.addEventListener("click", () => {
+    document.getElementById("criar-documento-modal")?.classList.remove("open");
+  });
+  document.getElementById("criar-documento-modal")?.addEventListener("click", e => {
+    if (e.target === e.currentTarget) e.currentTarget.classList.remove("open");
+  });
+
+  document.getElementById("criar-doc-save")?.addEventListener("click", () => {
+    const isCodigo = document.getElementById("doc-tipo-codigo")?.classList.contains("active");
+    const nfEl     = document.getElementById("doc-nf");
+    const dataEl   = document.getElementById("doc-data");
+
+    [nfEl, dataEl].forEach(el => el?.classList.remove("field-error"));
+    let valid = true;
+    if (!isCodigo && !nfEl?.value.trim()) { nfEl.classList.add("field-error"); valid = false; }
+    if (!dataEl?.value)                   { dataEl.classList.add("field-error"); valid = false; }
+    if (!valid) return;
+
+    const itens = collectDocItens();
+    if (itens.length === 0) {
+      showToast("Adicione ao menos um item ao documento.", "warning");
+      return;
+    }
+
+    if (currentEditEntradaDocId) {
+      const idx = (localEntradas || []).findIndex(d => d.id === currentEditEntradaDocId);
+      if (idx !== -1) {
+        localEntradas[idx] = {
+          ...localEntradas[idx],
+          notaFiscal:  isCodigo ? "" : (nfEl?.value.trim() || ""),
+          fornecedor:  document.getElementById("doc-fornecedor")?.value.trim() || "",
+          dataEntrada: dataEl.value,
+          observacao:  document.getElementById("doc-obs")?.value.trim() || "",
+          itens,
+        };
+      }
+      currentEditEntradaDocId = null;
+      document.getElementById("criar-documento-modal")?.classList.remove("open");
+      refreshEntradasList();
+      showToast("Documento atualizado com sucesso!");
+      return;
+    }
+
+    const novoDoc = {
+      id:          `doc-${Date.now()}`,
+      codigo:      document.getElementById("doc-codigo")?.value || gerarCodigoEntrada(),
+      notaFiscal:  isCodigo ? "" : (nfEl?.value.trim() || ""),
+      fornecedor:  document.getElementById("doc-fornecedor")?.value.trim() || "",
+      dataEntrada: dataEl.value,
+      responsavel: currentUser.name,
+      observacao:  document.getElementById("doc-obs")?.value.trim() || "",
+      status:      "pendente",
+      itens,
+    };
+
+    localEntradas = [novoDoc, ...(localEntradas || [])];
+    document.getElementById("criar-documento-modal")?.classList.remove("open");
+    refreshEntradasList();
+    showToast("Documento criado com status Pendente!");
+  });
+
+  document.getElementById("doc-nf")?.addEventListener("input", e => e.target.classList.remove("field-error"));
+  document.getElementById("doc-data")?.addEventListener("change", e => e.target.classList.remove("field-error"));
+}
+
+/* ================================================================
+   COMPRAS / SOLICITAÇÕES DE COMPRA
+   ================================================================ */
+
+function getSolStatusInfo(status) {
+  return ({
+    pendente:  { label: "Pendente",  cls: "entrada-status-pendente",  icon: "schedule"     },
+    atendida:  { label: "Atendida",  cls: "entrada-status-recebido",  icon: "check_circle" },
+    cancelada: { label: "Cancelada", cls: "entrada-status-cancelado", icon: "cancel"       },
+  })[status] || { label: status, cls: "", icon: "help" };
+}
+
+function getSolOrigemInfo(origem) {
+  return origem === "professor"
+    ? { label: "Professor",       icon: "school",    cls: "notif-tipo-solicitacao" }
+    : { label: "Estoque Mínimo",  icon: "smart_toy", cls: "notif-tipo-estoque"     };
+}
+
+function renderCompras() {
+  solicitacoesFilter = { search: "", origem: "all", status: "pendente" };
+
+  document.getElementById("main-content").innerHTML = `
+    <div class="agend-page">
+      <h1 class="page-section-title">Solicitações de Compra</h1>
+      <p class="page-section-sub">Centralize e acompanhe todas as necessidades de compra geradas pelo sistema ou pelos professores.</p>
+      <div class="page-toolbar">
+        <label class="page-search">
+          <span class="material-symbols-rounded">search</span>
+          <input type="text" id="compras-search" placeholder="Buscar por número, produto ou solicitante...">
+        </label>
+        <div class="filter-dropdown-wrap">
+          <button class="filter-btn" id="compras-origem-btn">
+            <span class="material-symbols-rounded">filter_list</span>
+            Origem
+            <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
+          </button>
+          <div class="filter-dropdown-menu" id="compras-origem-menu">
+            <div class="filter-option active" data-sol-origem="all">Todas</div>
+            <div class="filter-option" data-sol-origem="professor">Professor</div>
+            <div class="filter-option" data-sol-origem="estoque-minimo">Estoque mínimo</div>
+          </div>
+        </div>
+        <div class="filter-dropdown-wrap">
+          <button class="filter-btn active-filter" id="compras-status-btn">
+            <span class="material-symbols-rounded">filter_list</span>
+            Status
+            <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
+          </button>
+          <div class="filter-dropdown-menu" id="compras-status-menu">
+            <div class="filter-option" data-sol-status="all">Todos</div>
+            <div class="filter-option active" data-sol-status="pendente">Pendente</div>
+            <div class="filter-option" data-sol-status="atendida">Atendida</div>
+            <div class="filter-option" data-sol-status="cancelada">Cancelada</div>
+          </div>
+        </div>
+        <button class="export-btn-outline" id="compras-export-btn">
+          <span class="material-symbols-rounded">download</span>
+          Exportar
+        </button>
+      </div>
+      <div id="compras-table-container">
+        ${buildComprasList()}
+      </div>
+      ${buildVerSolicitacaoModal()}
+    </div>
+  `;
+
+  bindComprasEvents();
+}
+
+function buildComprasList() {
+  const q      = (solicitacoesFilter.search || "").toLowerCase();
+  const origem = solicitacoesFilter.origem;
+  const status = solicitacoesFilter.status;
+
+  let items = localSolicitacoes || [];
+  if (origem !== "all") items = items.filter(s => s.origem === origem);
+  if (status !== "all") items = items.filter(s => s.status === status);
+  if (q) items = items.filter(s =>
+    s.numero.toLowerCase().includes(q) ||
+    s.produto.toLowerCase().includes(q) ||
+    (s.solicitante || "").toLowerCase().includes(q)
+  );
+
+  const pendentes = (localSolicitacoes || []).filter(s => s.status === "pendente").length;
+  const headerBadge = pendentes > 0
+    ? `<span class="badge rounded-pill" style="background:#fff8e6;color:#b45309;font-size:11px;font-weight:700;padding:5px 12px">${pendentes} pendente(s)</span>`
+    : resultBadge(items.length);
+
+  const rows = items.length === 0
+    ? `<tr class="table-empty-row"><td colspan="8">Nenhuma solicitação encontrada.</td></tr>`
+    : items.map(s => {
+        const si = getSolStatusInfo(s.status);
+        const oi = getSolOrigemInfo(s.origem);
+        return `
+          <tr>
+            <td><span style="font-weight:700;font-size:13px">${s.numero}</span></td>
+            <td>${formatDateBR(s.data)}</td>
+            <td>
+              <span class="notif-tipo-badge ${oi.cls}">
+                <span class="material-symbols-rounded" style="font-size:13px">${oi.icon}</span>
+                ${oi.label}
+              </span>
+            </td>
+            <td>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span class="material-symbols-rounded" style="font-size:16px;color:var(--purple)">inventory_2</span>
+                ${s.produto}
+              </div>
+            </td>
+            <td>${s.quantidadeSolicitada} ${s.unidadeMedida}</td>
+            <td>${s.quantidadeDisponivel} ${s.unidadeMedida}</td>
+            <td>
+              <span class="entrada-status ${si.cls}">
+                <span class="material-symbols-rounded" style="font-size:13px">${si.icon}</span>
+                ${si.label}
+              </span>
+            </td>
+            <td>
+              <div class="action-cell">
+                <button class="action-icon-btn" title="Visualizar" data-view-sol-id="${s.id}">
+                  <span class="material-symbols-rounded">visibility</span>
+                </button>
+                ${s.status === "pendente" ? `
+                <button class="action-icon-btn" title="Marcar como atendida" data-atender-sol-id="${s.id}">
+                  <span class="material-symbols-rounded">check_circle</span>
+                </button>
+                <button class="action-icon-btn delete" title="Cancelar" data-cancelar-sol-id="${s.id}">
+                  <span class="material-symbols-rounded">cancel</span>
+                </button>` : ""}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+  return `
+    <div class="list-card">
+      <div class="list-card-header">
+        <span class="list-card-title">Lista de Solicitações</span>
+        ${headerBadge}
+      </div>
+      <div class="list-card-inner">
+        <div class="table-wrap">
+          <table class="produtos-table">
+            <thead>
+              <tr>
+                <th>Número</th>
+                <th>Data</th>
+                <th>Origem</th>
+                <th>Produto</th>
+                <th>Qtd Solicitada</th>
+                <th>Qtd Disponível</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildVerSolicitacaoModal() {
+  return `
+    <div class="modal-overlay" id="ver-sol-modal">
+      <div class="modal-card modal-card-wide">
+        <div class="modal-header">
+          <span class="modal-title" id="ver-sol-titulo">Solicitação</span>
+          <button class="modal-close" id="ver-sol-close">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+        <div class="modal-body" id="ver-sol-body"></div>
+        <div class="modal-body" style="border-top:1px solid var(--border);padding-top:14px">
+          <div class="modal-field" style="margin:0">
+            <label>Observações</label>
+            <input type="text" id="ver-sol-obs-input" placeholder="Registrar observação...">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary btn-pongo" id="ver-sol-fechar">Fechar</button>
+          <div style="flex:1"></div>
+          <button class="btn btn-success btn-pongo fw-bold d-flex align-items-center gap-2" id="ver-sol-salvar-obs">
+            <span class="material-symbols-rounded" style="font-size:17px">save</span>
+            Salvar obs.
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function refreshComprasList() {
+  const container = document.getElementById("compras-table-container");
+  if (container) container.innerHTML = buildComprasList();
+  bindComprasTableButtons();
+}
+
+function bindComprasTableButtons() {
+  document.querySelectorAll("[data-view-sol-id]").forEach(btn => {
+    btn.addEventListener("click", () => openVerSolicitacao(btn.dataset.viewSolId));
+  });
+
+  document.querySelectorAll("[data-atender-sol-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const sol = (localSolicitacoes || []).find(s => s.id === btn.dataset.atenderSolId);
+      if (sol) {
+        sol.status = "atendida";
+        refreshComprasList();
+        showToast("Solicitação marcada como atendida.");
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-cancelar-sol-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      showConfirmModal({
+        title:        "Cancelar Solicitação",
+        message:      "Deseja cancelar esta solicitação de compra?",
+        confirmLabel: "Cancelar Solicitação",
+        confirmIcon:  "cancel",
+        danger:       true,
+        onConfirm: () => {
+          const sol = (localSolicitacoes || []).find(s => s.id === btn.dataset.cancelarSolId);
+          if (sol) {
+            sol.status = "cancelada";
+            refreshComprasList();
+            showToast("Solicitação cancelada.", "warning");
+          }
+        },
+      });
+    });
+  });
+}
+
+function openVerSolicitacao(solId) {
+  const s = (localSolicitacoes || []).find(x => x.id === solId);
+  if (!s) return;
+
+  const si = getSolStatusInfo(s.status);
+  const oi = getSolOrigemInfo(s.origem);
+
+  document.getElementById("ver-sol-titulo").textContent = `Solicitação ${s.numero}`;
+  document.getElementById("ver-sol-obs-input").value    = s.observacoes || "";
+
+  document.getElementById("ver-sol-body").innerHTML = `
+    <div class="doc-info-grid">
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Número</span>
+        <span class="doc-info-value">${s.numero}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Data</span>
+        <span class="doc-info-value">${formatDateBR(s.data)}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Origem</span>
+        <span class="notif-tipo-badge ${oi.cls}" style="margin-top:2px">
+          <span class="material-symbols-rounded" style="font-size:13px">${oi.icon}</span>
+          ${oi.label}
+        </span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Status</span>
+        <span class="entrada-status ${si.cls}" style="margin-top:2px">
+          <span class="material-symbols-rounded" style="font-size:13px">${si.icon}</span>
+          ${si.label}
+        </span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Solicitante</span>
+        <span class="doc-info-value">${s.solicitante || "—"}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Agendamento Vinculado</span>
+        <span class="doc-info-value">${s.agendamentoId || "—"}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Produto</span>
+        <span class="doc-info-value">${s.produto}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Estoque Mínimo</span>
+        <span class="doc-info-value">${s.estoqueMinimo} ${s.unidadeMedida}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Quantidade Disponível</span>
+        <span class="doc-info-value">${s.quantidadeDisponivel} ${s.unidadeMedida}</span>
+      </div>
+      <div class="doc-info-cell">
+        <span class="doc-info-label">Quantidade Solicitada</span>
+        <span class="doc-info-value">${s.quantidadeSolicitada} ${s.unidadeMedida}</span>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("ver-sol-modal")?.classList.add("open");
+
+  const close = () => document.getElementById("ver-sol-modal")?.classList.remove("open");
+  document.getElementById("ver-sol-close").onclick  = close;
+  document.getElementById("ver-sol-fechar").onclick = close;
+  document.getElementById("ver-sol-modal").onclick  = e => { if (e.target === e.currentTarget) close(); };
+
+  document.getElementById("ver-sol-salvar-obs").onclick = () => {
+    s.observacoes = document.getElementById("ver-sol-obs-input").value.trim();
+    close();
+    refreshComprasList();
+    showToast("Observação registrada.");
+  };
+}
+
+function bindComprasEvents() {
+  document.getElementById("compras-search")?.addEventListener("input", e => {
+    solicitacoesFilter.search = e.target.value;
+    refreshComprasList();
+  });
+
+  document.getElementById("compras-export-btn")?.addEventListener("click", () => {
+    exportCSV("solicitacoes.csv",
+      ["Número", "Data", "Origem", "Produto", "Qtd Sol.", "Qtd Disp.", "Est. Mín.", "Status", "Solicitante", "Observações"],
+      (localSolicitacoes || []).map(s => [
+        s.numero, formatDateBR(s.data), getSolOrigemInfo(s.origem).label,
+        s.produto, `${s.quantidadeSolicitada} ${s.unidadeMedida}`,
+        `${s.quantidadeDisponivel} ${s.unidadeMedida}`, `${s.estoqueMinimo} ${s.unidadeMedida}`,
+        getSolStatusInfo(s.status).label, s.solicitante, s.observacoes || "",
+      ])
+    );
+  });
+
+  const makeFilter = (btnId, menuId, filterKey) => {
+    const btn  = document.getElementById(btnId);
+    const menu = document.getElementById(menuId);
+    btn?.addEventListener("click", e => { e.stopPropagation(); menu?.classList.toggle("open"); });
+    menu?.querySelectorAll(`[data-sol-${filterKey}]`).forEach(opt => {
+      opt.addEventListener("click", () => {
+        menu.querySelectorAll(".filter-option").forEach(o => o.classList.remove("active"));
+        opt.classList.add("active");
+        solicitacoesFilter[filterKey] = opt.dataset[`sol${filterKey.charAt(0).toUpperCase()}${filterKey.slice(1)}`];
+        btn.classList.toggle("active-filter", solicitacoesFilter[filterKey] !== "all");
+        menu.classList.remove("open");
+        refreshComprasList();
+      });
+    });
+    document.addEventListener("click", e => {
+      if (!menu?.contains(e.target) && e.target !== btn) menu?.classList.remove("open");
+    });
+  };
+
+  makeFilter("compras-origem-btn", "compras-origem-menu", "origem");
+  makeFilter("compras-status-btn", "compras-status-menu", "status");
+
+  bindComprasTableButtons();
 }
 
 function bindLayoutEvents() {

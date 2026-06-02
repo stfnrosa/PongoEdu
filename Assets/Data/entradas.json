@@ -1,0 +1,43 @@
+[
+  {
+    "id": "doc-001",
+    "codigo": "REC-2026-001",
+    "notaFiscal": "45821",
+    "fornecedor": "LabChem Distribuidora",
+    "dataEntrada": "2026-05-15",
+    "responsavel": "Ana Lima",
+    "observacao": "Pedido mensal de reagentes",
+    "status": "recebido",
+    "itens": [
+      { "produtoId": "2", "produto": "Hidróxido de Sódio", "quantidade": "500 g", "recebido": true },
+      { "produtoId": "6", "produto": "Fenolftaleína", "quantidade": "100 ml", "recebido": true }
+    ]
+  },
+  {
+    "id": "doc-002",
+    "codigo": "REC-2026-002",
+    "notaFiscal": "",
+    "fornecedor": "EquipLab",
+    "dataEntrada": "2026-05-22",
+    "responsavel": "Carlos Souza",
+    "observacao": "",
+    "status": "pendente",
+    "itens": [
+      { "produtoId": "12", "produto": "Luvas Nitrílicas", "quantidade": "5 caixas", "recebido": false },
+      { "produtoId": "10", "produto": "Pipeta Pasteur", "quantidade": "10 pacotes", "recebido": true }
+    ]
+  },
+  {
+    "id": "doc-003",
+    "codigo": "REC-2026-003",
+    "notaFiscal": "98765",
+    "fornecedor": "Quimico Express",
+    "dataEntrada": "2026-06-02",
+    "responsavel": "Ana Lima",
+    "observacao": "Pedido urgente — aguardando confirmação do fornecedor",
+    "status": "cancelado",
+    "itens": [
+      { "produtoId": "3", "produto": "Sulfato de Cobre", "quantidade": "500 g", "recebido": false }
+    ]
+  }
+]
