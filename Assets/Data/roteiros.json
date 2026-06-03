@@ -48,5 +48,71 @@
       { "produtoId": "2", "qty": "30 g" },
       { "produtoId": "5", "qty": "200 ml" }
     ]
+  },
+  {
+    "id": "5",
+    "titulo": "O Ar Ocupa Espaço",
+    "categoria": "Ciências",
+    "duracao": { "horas": 1, "minutos": 30 },
+    "turma": "6º Ano A",
+    "observacao": "Aula prática investigativa. Cada grupo recebe 1 copo transparente e acesso à bacia com água.",
+    "materiais": [
+      { "produtoId": "7", "qty": "6 unid." },
+      { "produtoId": "8", "qty": "2 unid." },
+      { "produtoId": "13", "qty": "30 unid." }
+    ]
+  },
+  {
+    "id": "6",
+    "titulo": "Germinação do Feijão",
+    "categoria": "Biologia",
+    "duracao": { "horas": 1, "minutos": 0 },
+    "turma": "6º Ano B",
+    "observacao": "Experimento de longa duração — observação diária durante 1 semana. Preparar dois grupos controle por bancada.",
+    "materiais": [
+      { "produtoId": "7", "qty": "10 unid." },
+      { "produtoId": "11", "qty": "2 unid." },
+      { "produtoId": "15", "qty": "1 unid." }
+    ]
+  },
+  {
+    "id": "7",
+    "titulo": "Misturas e Separação",
+    "categoria": "Ciências",
+    "duracao": { "horas": 1, "minutos": 30 },
+    "turma": "7º Ano A",
+    "observacao": "Usar filtro de papel adaptado. Comparar a mistura antes e após a filtração.",
+    "materiais": [
+      { "produtoId": "7", "qty": "8 unid." },
+      { "produtoId": "9", "qty": "4 unid." },
+      { "produtoId": "11", "qty": "3 unid." },
+      { "produtoId": "10", "qty": "1 pacote" }
+    ]
+  },
+  {
+    "id": "8",
+    "titulo": "Som e Vibração",
+    "categoria": "Física",
+    "duracao": { "horas": 1, "minutos": 0 },
+    "turma": "7º Ano B",
+    "observacao": "Cada grupo monta um instrumento com elásticos e caixa vazia. Comparar sons graves e agudos.",
+    "materiais": [
+      { "produtoId": "13", "qty": "30 unid." },
+      { "produtoId": "14", "qty": "10 unid." }
+    ]
+  },
+  {
+    "id": "9",
+    "titulo": "Erosão do Solo",
+    "categoria": "Ciências",
+    "duracao": { "horas": 1, "minutos": 30 },
+    "turma": "6º Ano C",
+    "observacao": "Montar as bancadas com terra e folhas com antecedência. Simular chuva com regador em área externa se possível.",
+    "materiais": [
+      { "produtoId": "8", "qty": "4 unid." },
+      { "produtoId": "9", "qty": "2 unid." },
+      { "produtoId": "11", "qty": "2 unid." },
+      { "produtoId": "15", "qty": "1 unid." }
+    ]
   }
 ]

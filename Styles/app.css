@@ -980,10 +980,15 @@ tbody tr:last-child td {
 
   /* ── Cards ── */
   .hero-card, .card { border-radius: 18px; }
-  .hero-card        { padding: 20px; }
+  .hero-card        { padding: 20px; grid-template-columns: 1fr; }
   .card             { padding: 16px; }
   .list-card-header { padding: 14px 16px; flex-wrap: wrap; gap: 8px; }
   .list-card-inner  { padding: 0 8px 8px; }
+
+  /* ── Hero action buttons ── */
+  .action-row { flex-direction: column; gap: 12px; }
+  .action-row .btn-green,
+  .action-row .btn-outline-purple { width: 100%; justify-content: center; }
 
   /* ── Tabelas ── */
   table          { min-width: 560px; }
@@ -1017,6 +1022,8 @@ tbody tr:last-child td {
   .perfil-avatar-row { flex-direction: column; }
   .avatar-right-col  { width: 100%; }
   .perfil-card       { padding: 16px; }
+  .perfil-card .modal-row { flex-direction: column; gap: 0; }
+  .perfil-card .modal-row .modal-field,
   .modal-row .modal-field { width: 100%; }
   .perfil-actions    { justify-content: center; }
   .perfil-save-btn   { width: 100%; justify-content: center; }

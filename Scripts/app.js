@@ -97,6 +97,7 @@ let localSolicitacoes = null;
 let solicitacoesFilter = { search: "", origem: "all", status: "pendente" };
 
 let localMovimentacoes = null;
+let _empOpenModal = null;
 let movFilter = { search: "", tipo: "all" };
 
 /* ---- Modal de confirmação reutilizável ---- */
@@ -506,6 +507,14 @@ function loadPage(page) {
     return;
   }
 
+  if (page === "criar-roteiro") {
+    renderRoteiros();
+    setTimeout(() => {
+      document.getElementById("new-roteiro-btn")?.click();
+    }, 50);
+    return;
+  }
+
   if (page === "emprestimos") {
     renderEmprestimos();
     return;
@@ -568,8 +577,11 @@ function enrichDashboardData(dashboard, profile) {
   const upcoming = agendamentos.filter(a => a.data >= today && a.data <= futureLimitStr);
 
   if (profile === "professor") {
-    data.agendamentosHoje.items = todayAgend.length > 0
-      ? todayAgend.map(a => ({
+    const meuNome       = currentUser?.name || "";
+    const meusTodayAgend = todayAgend.filter(a => a.professor === meuNome);
+
+    data.agendamentosHoje.items = meusTodayAgend.length > 0
+      ? meusTodayAgend.map(a => ({
           inicio: a.horaInicio,
           fim:    a.horaFim,
           titulo: a.titulo,
@@ -579,7 +591,7 @@ function enrichDashboardData(dashboard, profile) {
         }))
       : [{ inicio: "—", fim: "—", titulo: "Nenhum agendamento hoje", turma: "", alunos: "", status: "em-preparacao" }];
 
-    const aguardando = agendamentos.filter(a => a.status === "pendente");
+    const aguardando = agendamentos.filter(a => a.status === "pendente" && a.professor === meuNome);
     data.praticasPreparadas.title     = "Práticas Aguardando";
     data.praticasPreparadas.icon      = "schedule";
     data.praticasPreparadas.iconColor = "yellow";
@@ -1252,6 +1264,7 @@ function buildCriarEmprestimoModal() {
 function renderEmprestimos() {
   const isAuxiliar = currentUser.profile === "auxiliar";
   const empData    = appData.emprestimos || [];
+  let editEmpId    = null;
   let empFilter    = { search: "", status: "all" };
 
   const statusOpts = [
@@ -1346,15 +1359,61 @@ function renderEmprestimos() {
     </div>
   `;
 
-  // Modal Criar Empréstimo
-  const openEmpModal = () => {
-    ["emp-produto", "emp-qty", "emp-inicio", "emp-fim", "emp-obs"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) { el.value = id === "emp-qty" ? "1" : ""; el.classList.remove("field-error"); }
-    });
-    document.getElementById("criar-emp-modal")?.classList.add("open");
+  // Modal Criar / Editar Empréstimo
+  const openEmpModal = (empItem = null) => {
+    editEmpId = empItem ? empItem.id : null;
+
+    const modal = document.getElementById("criar-emp-modal");
+    if (!modal) return;
+
+    modal.querySelector(".modal-title").textContent = empItem
+      ? "Editar Empréstimo"
+      : "Nova Solicitação de Empréstimo";
+
+    const produtoEl = document.getElementById("emp-produto");
+    const qtyEl     = document.getElementById("emp-qty");
+    const inicioEl  = document.getElementById("emp-inicio");
+    const fimEl     = document.getElementById("emp-fim");
+    const obsEl     = document.getElementById("emp-obs");
+
+    [produtoEl, qtyEl, inicioEl, fimEl, obsEl].forEach(el => el?.classList.remove("field-error"));
+
+    if (empItem) {
+      if (produtoEl) { produtoEl.value = ""; produtoEl.disabled = true;
+        const opt = [...produtoEl.options].find(o => o.text.startsWith(empItem.produto));
+        if (opt) produtoEl.value = opt.value;
+        else { const o = new Option(empItem.produto, "_existing"); produtoEl.add(o); produtoEl.value = "_existing"; }
+      }
+      const qty = parseInt(empItem.quantidade) || 1;
+      if (qtyEl) qtyEl.value = qty;
+      if (inicioEl && empItem.dataInicio && empItem.horaInicio)
+        inicioEl.value = `${empItem.dataInicio}T${empItem.horaInicio}`;
+      if (fimEl && empItem.dataFim && empItem.horaFim)
+        fimEl.value = `${empItem.dataFim}T${empItem.horaFim}`;
+      if (obsEl) obsEl.value = empItem.observacoes || "";
+    } else {
+      if (produtoEl) { produtoEl.value = ""; produtoEl.disabled = false; }
+      if (qtyEl)     qtyEl.value = "1";
+      if (inicioEl)  inicioEl.value = "";
+      if (fimEl)     fimEl.value = "";
+      if (obsEl)     obsEl.value = "";
+    }
+
+    const confirmBtn = document.getElementById("emp-modal-confirm");
+    if (confirmBtn) confirmBtn.querySelector("span:last-child, span.material-symbols-rounded + *")
+      || (confirmBtn.childNodes[confirmBtn.childNodes.length - 1].textContent =
+          empItem ? "Salvar Alterações" : "Enviar Solicitação");
+
+    modal.classList.add("open");
   };
-  const closeEmpModal = () => document.getElementById("criar-emp-modal")?.classList.remove("open");
+  const closeEmpModal = () => {
+    document.getElementById("criar-emp-modal")?.classList.remove("open");
+    const produtoEl = document.getElementById("emp-produto");
+    if (produtoEl) produtoEl.disabled = false;
+    editEmpId = null;
+  };
+
+  _empOpenModal = openEmpModal;
 
   document.getElementById("new-emprestimo-btn")?.addEventListener("click", openEmpModal);
   document.getElementById("emp-modal-close")?.addEventListener("click", closeEmpModal);
@@ -1377,36 +1436,53 @@ function renderEmprestimos() {
     const inicioEl  = document.getElementById("emp-inicio");
     const fimEl     = document.getElementById("emp-fim");
 
-    [produtoEl, inicioEl, fimEl].forEach(el => el?.classList.remove("field-error"));
+    [inicioEl, fimEl].forEach(el => el?.classList.remove("field-error"));
     let valid = true;
-    if (!produtoEl?.value) { produtoEl.classList.add("field-error"); valid = false; }
-    if (!inicioEl?.value)  { inicioEl.classList.add("field-error");  valid = false; }
-    if (!fimEl?.value)     { fimEl.classList.add("field-error");     valid = false; }
+    if (!inicioEl?.value) { inicioEl.classList.add("field-error"); valid = false; }
+    if (!fimEl?.value)    { fimEl.classList.add("field-error");    valid = false; }
+    if (!editEmpId && !produtoEl?.value) { produtoEl?.classList.add("field-error"); valid = false; }
     if (!valid) return;
 
-    const produto = localProdutos?.find(p => p.id === produtoEl.value);
     const [dataInicio, horaInicio] = inicioEl.value.split("T");
     const [dataFim,    horaFim]    = fimEl.value.split("T");
     const qty = document.getElementById("emp-qty")?.value || "1";
 
-    const novo = {
-      id:         String(Date.now()),
-      produto:    produto?.nome || produtoEl.value,
-      quantidade: `${qty} unidade${qty > 1 ? "s" : ""}`,
-      professor:  currentUser.name,
-      dataInicio, horaInicio: horaInicio?.slice(0,5) || "",
-      dataFim,    horaFim:    horaFim?.slice(0,5)    || "",
-      observacoes: document.getElementById("emp-obs")?.value.trim() || "",
-      status:     "pendente",
-    };
-    appData.emprestimos.push(novo);
-    empData.push(novo);
-
-    closeEmpModal();
-    const container = document.getElementById("emp-list-container");
-    if (container) container.innerHTML = buildEmprestimosList(empData, isAuxiliar);
-    bindEmpTableButtons(isAuxiliar);
-    showToast("Solicitação de empréstimo enviada. Aguardando aprovação do auxiliar.");
+    if (editEmpId) {
+      const existing = appData.emprestimos.find(x => x.id === editEmpId);
+      if (existing) {
+        existing.quantidade  = `${qty} unidade${qty > 1 ? "s" : ""}`;
+        existing.dataInicio  = dataInicio;
+        existing.horaInicio  = horaInicio?.slice(0,5) || "";
+        existing.dataFim     = dataFim;
+        existing.horaFim     = horaFim?.slice(0,5) || "";
+        existing.observacoes = document.getElementById("emp-obs")?.value.trim() || "";
+      }
+      closeEmpModal();
+      const container = document.getElementById("emp-list-container");
+      if (container) container.innerHTML = buildEmprestimosList(empData, isAuxiliar);
+      bindEmpTableButtons(isAuxiliar);
+      showToast("Solicitação de empréstimo atualizada.");
+    } else {
+      if (!produtoEl?.value) return;
+      const produto = localProdutos?.find(p => p.id === produtoEl.value);
+      const novo = {
+        id:         String(Date.now()),
+        produto:    produto?.nome || produtoEl.value,
+        quantidade: `${qty} unidade${qty > 1 ? "s" : ""}`,
+        professor:  currentUser.name,
+        dataInicio, horaInicio: horaInicio?.slice(0,5) || "",
+        dataFim,    horaFim:    horaFim?.slice(0,5)    || "",
+        observacoes: document.getElementById("emp-obs")?.value.trim() || "",
+        status:     "pendente",
+      };
+      appData.emprestimos.push(novo);
+      empData.push(novo);
+      closeEmpModal();
+      const container = document.getElementById("emp-list-container");
+      if (container) container.innerHTML = buildEmprestimosList(empData, isAuxiliar);
+      bindEmpTableButtons(isAuxiliar);
+      showToast("Solicitação de empréstimo enviada. Aguardando aprovação do auxiliar.");
+    }
   });
 
   document.getElementById("emp-search")?.addEventListener("input", e => {
@@ -1473,7 +1549,7 @@ function openViewEmprestimo(e, isAuxiliar) {
   };
   const s = statusMap[e.status] || { label: e.status, cls: "", icon: "help" };
 
-  document.getElementById("view-emp-titulo").textContent = `Empréstimo — ${e.produto}`;
+  document.getElementById("view-emp-titulo").textContent = "Visualizar Empréstimo";
   document.getElementById("view-emp-body").innerHTML = `
     <div class="doc-info-grid">
       <div class="doc-info-cell">
@@ -1642,7 +1718,7 @@ function bindEmpTableButtons(isAuxiliar) {
   document.querySelectorAll("[data-edit-emp-id]").forEach(btn => {
     btn.addEventListener("click", () => {
       const e = empData.find(x => x.id === btn.dataset.editEmpId);
-      if (e) showToast(`Edição de "${e.produto}" será disponibilizada em breve.`, "warning");
+      if (e && _empOpenModal) _empOpenModal(e);
     });
   });
 
@@ -2433,7 +2509,15 @@ function bindRoteirosTableButtons() {
       const mats = r.materiais || [];
       document.getElementById("view-rot-materiais").innerHTML = mats.length === 0
         ? `<span style="color:var(--muted)">Nenhum material cadastrado</span>`
-        : mats.map(m => `<div style="padding:2px 0">${m.nome || m.produto || m.id}</div>`).join("");
+        : mats.map(m => {
+            const prod = (localProdutos || []).find(p => p.id === m.produtoId);
+            const nome = prod ? prod.nome : (m.nome || m.produtoId || "—");
+            return `<div style="padding:3px 0;display:flex;gap:8px;align-items:center">
+              <span class="material-symbols-rounded" style="font-size:15px;color:var(--purple)">science</span>
+              <span>${nome}</span>
+              ${m.qty ? `<span style="color:var(--muted);font-size:12px">— ${m.qty}</span>` : ""}
+            </div>`;
+          }).join("");
       document.getElementById("view-roteiro-modal").classList.add("open");
     });
   });
@@ -2675,7 +2759,11 @@ function buildCalendarSection() {
 
   const dayCols = days.map(d => {
     const dateStr = toDateStr(d);
-    const events = agendamentos.filter(a => a.data === dateStr).map(evt => {
+    const isProfessor = currentUser?.profile === "professor";
+    const events = agendamentos.filter(a =>
+      a.data === dateStr &&
+      (!isProfessor || a.professor === currentUser.name)
+    ).map(evt => {
       const [sh, sm] = evt.horaInicio.split(":").map(Number);
       const [eh, em] = evt.horaFim.split(":").map(Number);
       const top = (sh - CAL_START) * HOUR_PX + (sm / 60) * HOUR_PX;
@@ -2714,7 +2802,12 @@ function buildCalendarSection() {
           <span class="cal-range">${formatWeekRange(days)}</span>
         </div>
         <div style="display:flex;align-items:center;gap:12px">
-          ${resultBadge(agendamentos.length, "agendamento(s)")}
+          ${resultBadge(
+            currentUser?.profile === "professor"
+              ? agendamentos.filter(a => a.professor === currentUser.name).length
+              : agendamentos.length,
+            "agendamento(s)"
+          )}
           ${btnCreate({ id: "cal-create-btn", label: "Criar Agendamento" })}
         </div>
       </div>
@@ -3747,7 +3840,7 @@ function renderMovimentacoes() {
         <div class="filter-dropdown-wrap">
           <button class="filter-btn" id="mov-tipo-btn">
             <span class="material-symbols-rounded">filter_list</span>
-            Tipo
+            Filtrar tipo
             <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
           </button>
           <div class="filter-dropdown-menu" id="mov-tipo-menu">
@@ -4549,7 +4642,7 @@ function buildEntradasList(docs) {
         <span class="list-card-title">Documentos de Entrada</span>
         <div style="display:flex;align-items:center;gap:12px">
           ${resultBadge(docs.length)}
-          ${btnCreate({ id: "new-entrada-btn", label: "Nova Entrada", icon: "add_box" })}
+          ${btnCreate({ id: "new-entrada-btn", label: "Nova Entrada" })}
         </div>
       </div>
       <div class="list-card-inner">
@@ -5132,21 +5225,9 @@ function renderCompras() {
           <input type="text" id="compras-search" placeholder="Buscar por número, produto ou solicitante...">
         </label>
         <div class="filter-dropdown-wrap">
-          <button class="filter-btn" id="compras-origem-btn">
-            <span class="material-symbols-rounded">filter_list</span>
-            Origem
-            <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
-          </button>
-          <div class="filter-dropdown-menu" id="compras-origem-menu">
-            <div class="filter-option active" data-sol-origem="all">Todas</div>
-            <div class="filter-option" data-sol-origem="professor">Professor</div>
-            <div class="filter-option" data-sol-origem="estoque-minimo">Estoque mínimo</div>
-          </div>
-        </div>
-        <div class="filter-dropdown-wrap">
           <button class="filter-btn" id="compras-status-btn">
             <span class="material-symbols-rounded">filter_list</span>
-            Status
+            Filtrar status
             <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
           </button>
           <div class="filter-dropdown-menu" id="compras-status-menu">
@@ -5553,7 +5634,6 @@ function bindComprasEvents() {
     });
   };
 
-  makeFilter("compras-origem-btn", "compras-origem-menu", "origem");
   makeFilter("compras-status-btn", "compras-status-menu", "status");
 
   bindComprasTableButtons();

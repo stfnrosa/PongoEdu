@@ -24,9 +24,14 @@ body {
 }
 
 .topbar {
-  height: 88px;
-  background: #fff;
+  min-height: 72px;
+  padding: 0;
+  background: rgba(255, 255, 255, .95);
+  backdrop-filter: blur(14px);
   border-bottom: 1px solid #e8edf5;
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
 }
@@ -34,8 +39,29 @@ body {
 .logo-area {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   text-decoration: none;
+}
+
+.logo-img {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+}
+
+.brand-title {
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.brand-title span:first-child { color: var(--green); }
+.brand-title span:last-child  { color: var(--purple); }
+
+.brand-subtitle {
+  font-size: 12px;
+  color: #65718a;
+  margin-top: 4px;
 }
 
 .logo-image {

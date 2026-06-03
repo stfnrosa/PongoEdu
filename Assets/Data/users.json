@@ -1,11 +1,11 @@
 [
   {
     "id": 1,
-    "name": "Professor",
+    "name": "Ana Lima",
     "email": "professor@pongoedu.com.br",
     "password": "123",
     "profile": "professor",
-    "avatar": "👨‍🏫"
+    "avatar": "👩‍🏫"
   },
   {
     "id": 2,

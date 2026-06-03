@@ -32,9 +32,14 @@ body {
 }
 
 .topbar {
-  background: white;
+  min-height: 72px;
+  padding: 0;
+  background: rgba(255, 255, 255, .95);
+  backdrop-filter: blur(14px);
   border-bottom: 1px solid #e8edf5;
-  height: 92px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
 }
@@ -42,7 +47,29 @@ body {
 .logo-area {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
+}
+
+.logo-img {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+}
+
+.brand-title {
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--dark);
+}
+
+.brand-title span:first-child { color: var(--green); }
+.brand-title span:last-child  { color: var(--purple); }
+
+.brand-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
 }
 
 .logo-image {
