@@ -601,13 +601,22 @@ function enrichDashboardData(dashboard, profile) {
   }
 
   if (profile === "auxiliar") {
-    const pendentes    = agendamentos.filter(a => a.status === "pendente").length;
-    const reservasHoje = todayAgend.length;
-    const aVencer      = upcoming.length;
+    const pendentes       = agendamentos.filter(a => a.status === "pendente").length;
+    const reservasHoje    = todayAgend.length;
+    const aVencer         = upcoming.length;
+    const solicitacoesPend = (localSolicitacoes || []).filter(s => s.status === "pendente").length;
 
-    data.summary.items[0].value = String(pendentes);
-    data.summary.items[2].value = String(aVencer);
-    data.summary.items[3].value = String(reservasHoje);
+    data.summary.items[0].title    = "Agendamentos pendentes";
+    data.summary.items[0].subtitle = "Aguardando preparo";
+    data.summary.items[0].value    = String(pendentes);
+
+    data.summary.items[1].title    = "Solicitações abertas";
+    data.summary.items[1].subtitle = "Pendentes de aprovação";
+    data.summary.items[1].value    = String(solicitacoesPend);
+
+    data.summary.items[2].title    = "Reservas do dia";
+    data.summary.items[2].subtitle = "Hoje";
+    data.summary.items[2].value    = String(reservasHoje);
 
     const empStatusMap = {
       "agendado":     { label: "Empréstimo agendado",     icon: "schedule",     color: "blue"   },
@@ -5111,7 +5120,7 @@ function getSolOrigemInfo(origem) {
 }
 
 function renderCompras() {
-  solicitacoesFilter = { search: "", origem: "all", status: "pendente" };
+  solicitacoesFilter = { search: "", origem: "all", status: "all" };
 
   document.getElementById("main-content").innerHTML = `
     <div class="agend-page">
@@ -5135,14 +5144,14 @@ function renderCompras() {
           </div>
         </div>
         <div class="filter-dropdown-wrap">
-          <button class="filter-btn active-filter" id="compras-status-btn">
+          <button class="filter-btn" id="compras-status-btn">
             <span class="material-symbols-rounded">filter_list</span>
             Status
             <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
           </button>
           <div class="filter-dropdown-menu" id="compras-status-menu">
-            <div class="filter-option" data-sol-status="all">Todos</div>
-            <div class="filter-option active" data-sol-status="pendente">Pendente</div>
+            <div class="filter-option active" data-sol-status="all">Todos</div>
+            <div class="filter-option" data-sol-status="pendente">Pendente</div>
             <div class="filter-option" data-sol-status="atendida">Atendida</div>
             <div class="filter-option" data-sol-status="cancelada">Cancelada</div>
           </div>
@@ -5182,12 +5191,15 @@ function buildComprasList() {
     : resultBadge(items.length);
 
   const rows = items.length === 0
-    ? `<tr class="table-empty-row"><td colspan="8">Nenhuma solicitação encontrada.</td></tr>`
+    ? `<tr class="table-empty-row"><td colspan="9">Nenhuma solicitação encontrada.</td></tr>`
     : items.map(s => {
         const si = getSolStatusInfo(s.status);
         const oi = getSolOrigemInfo(s.origem);
         return `
           <tr>
+            <td style="width:40px;text-align:center">
+              <input type="checkbox" class="sol-checkbox" data-sol-id="${s.id}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--purple)">
+            </td>
             <td><span style="font-weight:700;font-size:13px">${s.numero}</span></td>
             <td>${formatDateBR(s.data)}</td>
             <td>
@@ -5221,7 +5233,10 @@ function buildComprasList() {
                 </button>
                 <button class="action-icon-btn delete" title="Cancelar" data-cancelar-sol-id="${s.id}">
                   <span class="material-symbols-rounded">cancel</span>
-                </button>` : ""}
+                </button>` : `
+                <button class="action-icon-btn" title="Atendida" disabled style="opacity:.35;cursor:not-allowed">
+                  <span class="material-symbols-rounded">check_circle</span>
+                </button>`}
               </div>
             </td>
           </tr>
@@ -5229,6 +5244,16 @@ function buildComprasList() {
       }).join("");
 
   return `
+    <div class="lote-action-bar" id="lote-action-bar" style="display:none">
+      <span id="lote-count-label">0 item(s) selecionado(s)</span>
+      <button class="new-item-btn" id="gerar-pedido-btn" style="height:36px;font-size:13px;padding:0 18px">
+        <span class="material-symbols-rounded" style="font-size:17px">download</span>
+        Gerar Pedido de Compra (.xlsx)
+      </button>
+      <button class="action-icon-btn" id="lote-deselect-btn" title="Limpar seleção" style="margin-left:4px">
+        <span class="material-symbols-rounded">close</span>
+      </button>
+    </div>
     <div class="list-card">
       <div class="list-card-header">
         <span class="list-card-title">Lista de Solicitações</span>
@@ -5239,6 +5264,9 @@ function buildComprasList() {
           <table class="produtos-table">
             <thead>
               <tr>
+                <th style="width:40px;text-align:center">
+                  <input type="checkbox" id="sol-select-all" style="width:16px;height:16px;cursor:pointer;accent-color:var(--purple)">
+                </th>
                 <th>Número</th>
                 <th>Data</th>
                 <th>Origem</th>
@@ -5293,9 +5321,91 @@ function refreshComprasList() {
   bindComprasTableButtons();
 }
 
+function getSelectedSolIds() {
+  return [...document.querySelectorAll(".sol-checkbox:checked")].map(cb => cb.dataset.solId);
+}
+
+function updateLoteBar() {
+  const ids    = getSelectedSolIds();
+  const bar    = document.getElementById("lote-action-bar");
+  const label  = document.getElementById("lote-count-label");
+  if (!bar) return;
+  bar.style.display  = ids.length > 0 ? "flex" : "none";
+  if (label) label.textContent = `${ids.length} item(s) selecionado(s)`;
+}
+
+function exportPedidoCompraXLSX(ids) {
+  const solicitacoes = (localSolicitacoes || []).filter(s => ids.includes(s.id));
+  if (!solicitacoes.length) { showToast("Nenhum item selecionado.", "warning"); return; }
+
+  const origemLabel  = { professor: "Professor", "estoque-minimo": "Estoque mínimo" };
+  const statusLabel  = { pendente: "Pendente", atendida: "Atendida", cancelada: "Cancelada" };
+
+  const data = [
+    ["Pedido de Compra — PongoEdu"],
+    [`Gerado em: ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}`],
+    [],
+    ["Nº Solicitação", "Data", "Origem", "Produto", "Qtd Solicitada", "Unidade", "Qtd Disponível", "Solicitante", "Status", "Observações"],
+    ...solicitacoes.map(s => [
+      s.numero,
+      formatDateBR(s.data),
+      origemLabel[s.origem] || s.origem,
+      s.produto,
+      s.quantidadeSolicitada,
+      s.unidadeMedida,
+      s.quantidadeDisponivel,
+      s.solicitante || "—",
+      statusLabel[s.status] || s.status,
+      s.observacoes || "",
+    ]),
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+
+  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 9 } }];
+  ws["!cols"]   = [10, 12, 16, 24, 14, 10, 14, 18, 12, 20].map(w => ({ wch: w }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Pedido de Compra");
+  XLSX.writeFile(wb, `Pedido_Compra_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+  solicitacoes.forEach(s => {
+    const local = (localSolicitacoes || []).find(x => x.id === s.id);
+    if (local) local.status = "atendida";
+  });
+
+  refreshComprasList();
+  showToast(`Pedido gerado e ${solicitacoes.length} solicitação(ões) marcada(s) como atendida.`);
+}
+
 function bindComprasTableButtons() {
   document.querySelectorAll("[data-view-sol-id]").forEach(btn => {
     btn.addEventListener("click", () => openVerSolicitacao(btn.dataset.viewSolId));
+  });
+
+  const selectAll = document.getElementById("sol-select-all");
+  selectAll?.addEventListener("change", () => {
+    document.querySelectorAll(".sol-checkbox").forEach(cb => cb.checked = selectAll.checked);
+    updateLoteBar();
+  });
+
+  document.querySelectorAll(".sol-checkbox").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const all = document.querySelectorAll(".sol-checkbox");
+      const checked = document.querySelectorAll(".sol-checkbox:checked");
+      if (selectAll) selectAll.checked = all.length === checked.length;
+      updateLoteBar();
+    });
+  });
+
+  document.getElementById("gerar-pedido-btn")?.addEventListener("click", () => {
+    exportPedidoCompraXLSX(getSelectedSolIds());
+  });
+
+  document.getElementById("lote-deselect-btn")?.addEventListener("click", () => {
+    document.querySelectorAll(".sol-checkbox").forEach(cb => cb.checked = false);
+    if (document.getElementById("sol-select-all")) document.getElementById("sol-select-all").checked = false;
+    updateLoteBar();
   });
 
   document.querySelectorAll("[data-atender-sol-id]").forEach(btn => {

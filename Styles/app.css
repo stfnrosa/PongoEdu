@@ -446,6 +446,27 @@ body {
   background: #fff;
   color: var(--purple);
   border: 1px solid #cbb8ff;
+  font-size: 15px;
+  transition: background .15s, border-color .15s, color .15s;
+}
+
+.btn-outline-purple:hover {
+  background: #f3eeff;
+  border-color: var(--purple);
+  color: #5b1fd8;
+  text-decoration: none;
+}
+
+.btn-green {
+  font-size: 15px;
+  transition: background .15s, box-shadow .15s;
+}
+
+.btn-green:hover {
+  background: linear-gradient(135deg, #0aaa4e, #029040);
+  box-shadow: 0 16px 30px rgba(8, 180, 79, .32);
+  text-decoration: none;
+  color: #fff;
 }
 
 .stock-health {
@@ -599,6 +620,11 @@ body {
 }
 
 .yellow {
+  color: #d97706;
+}
+
+.yellow-soft {
+  background: #fef9c3;
   color: #d97706;
 }
 
@@ -1422,6 +1448,21 @@ tbody tr:last-child td {
   color: var(--purple);
   font-weight: 700;
   background: #f0eaff;
+}
+
+/* Barra de ação em lote */
+.lote-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f3eeff;
+  border: 1px solid #cbb8ff;
+  border-radius: 14px;
+  padding: 10px 18px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--purple);
 }
 
 /* List card */

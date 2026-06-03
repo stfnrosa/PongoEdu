@@ -173,10 +173,10 @@
       "icon": "today",
       "items": [
         {
-          "title": "Bancadas pendentes",
+          "title": "Agendamentos pendentes",
           "subtitle": "Aguardando preparo",
-          "icon": "table_bar",
-          "color": "green",
+          "icon": "event_note",
+          "color": "yellow",
           "value": "3"
         },
         {
@@ -185,13 +185,6 @@
           "icon": "assignment",
           "color": "blue",
           "value": "6"
-        },
-        {
-          "title": "Atividades a vencer",
-          "subtitle": "Nos próximos 7 dias",
-          "icon": "event_busy",
-          "color": "orange",
-          "value": "5"
         },
         {
           "title": "Reservas do dia",
