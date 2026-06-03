@@ -1761,16 +1761,14 @@ function getFilteredProdutos() {
 function buildProdutosTable(produtos, isAuxiliar) {
   const statusLabels = { normal: "Normal", "estoque-baixo": "Estoque baixo", vencido: "Vencido" };
 
-  const colCount = isAuxiliar ? 7 : 6;
+  const colCount = isAuxiliar ? 8 : 7;
 
   const rows = produtos.length === 0
     ? `<tr class="table-empty-row"><td colspan="${colCount}">Nenhum produto encontrado.</td></tr>`
     : produtos.map(p => `
         <tr>
-          <td>
-            <span class="prod-codigo">${p.codigo}</span>
-            ${p.nome}
-          </td>
+          <td><span class="prod-codigo">${p.codigo}</span></td>
+          <td>${p.nome}</td>
           <td>${p.categoria}</td>
           <td>${fmtQty(p)}</td>
           <td>${p.validade}</td>
@@ -1813,7 +1811,8 @@ function buildProdutosTable(produtos, isAuxiliar) {
           <table class="produtos-table tbl-produtos">
             <thead>
               <tr>
-                <th>Produtos</th>
+                <th>Código</th>
+                <th>Produto</th>
                 <th>Categoria</th>
                 <th>Quantidade</th>
                 <th>Validade</th>
@@ -2733,6 +2732,21 @@ function formatWeekRange(days) {
   return `${sd} – ${ed} de ${my}`;
 }
 
+function layoutDayEvents(events) {
+  const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  const sorted = [...events].sort((a, b) => toMin(a.horaInicio) - toMin(b.horaInicio));
+  const colEnds = [];
+  const assignments = new Map();
+  sorted.forEach(evt => {
+    const start = toMin(evt.horaInicio);
+    let col = colEnds.findIndex(end => end <= start);
+    if (col === -1) col = colEnds.length;
+    colEnds[col] = toMin(evt.horaFim);
+    assignments.set(evt.id, col);
+  });
+  return { assignments, total: Math.max(colEnds.length, 1) };
+}
+
 function buildCalendarSection() {
   const DAY_NAMES = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
   const days = getWeekDays(calWeekOffset);
@@ -2760,10 +2774,15 @@ function buildCalendarSection() {
   const dayCols = days.map(d => {
     const dateStr = toDateStr(d);
     const isProfessor = currentUser?.profile === "professor";
-    const events = agendamentos.filter(a =>
+    const dayEvts = agendamentos.filter(a =>
       a.data === dateStr &&
       (!isProfessor || a.professor === currentUser.name)
-    ).map(evt => {
+    );
+    const layout = layoutDayEvents(dayEvts);
+    const N = layout.total;
+
+    const events = dayEvts.map(evt => {
+      const col = layout.assignments.get(evt.id) || 0;
       const [sh, sm] = evt.horaInicio.split(":").map(Number);
       const [eh, em] = evt.horaFim.split(":").map(Number);
       const top = (sh - CAL_START) * HOUR_PX + (sm / 60) * HOUR_PX;
@@ -2773,8 +2792,11 @@ function buildCalendarSection() {
       const icon = isPendente
         ? `<span class="material-symbols-rounded cal-evt-icon">schedule</span>`
         : "";
+      const colStyle = N > 1
+        ? `left:calc(${(col / N * 100).toFixed(1)}% + 3px);right:auto;width:calc(${(100 / N).toFixed(1)}% - 6px);`
+        : `left:4px;right:4px;`;
       return `
-        <div class="cal-event cal-event-${colorClass}" data-agend-id="${evt.id}" style="top:${top}px;height:${height}px;cursor:pointer">
+        <div class="cal-event cal-event-${colorClass}" data-agend-id="${evt.id}" style="top:${top}px;height:${height}px;cursor:pointer;${colStyle}">
           <div class="cal-evt-hdr">
             <span class="cal-evt-time">${evt.horaInicio} - ${evt.horaFim}</span>
             ${icon}
@@ -2846,18 +2868,19 @@ function buildCriarAgendamentoModal() {
             <input type="text" id="agend-nome" placeholder="Ex: Titulação Ácido-Base">
           </div>
 
+          <div class="modal-field">
+            <label>Data <span class="required-star">*</span></label>
+            <input type="date" id="agend-data">
+          </div>
+
           <div class="modal-row">
             <div class="modal-field">
-              <label>Data <span class="required-star">*</span></label>
-              <input type="date" id="agend-data">
+              <label>Hora início <span class="required-star">*</span></label>
+              <input type="time" id="agend-inicio" value="10:00">
             </div>
             <div class="modal-field">
-              <label>Horário <span class="required-star">*</span></label>
-              <div class="time-range-wrap">
-                <input type="time" id="agend-inicio" value="10:00">
-                <span class="time-sep">–</span>
-                <input type="time" id="agend-fim" value="12:00">
-              </div>
+              <label>Hora fim <span class="required-star">*</span></label>
+              <input type="time" id="agend-fim" value="12:00">
             </div>
           </div>
 
@@ -3124,6 +3147,22 @@ function bindCalendarEvents() {
       if (!el?.value?.trim()) { el.classList.add("field-error"); valid = false; }
     });
     if (!valid) return;
+
+    const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+    const conflito = (appData.agendamentos || []).find(a =>
+      a.id !== id &&
+      a.data === dataEl.value &&
+      toMin(a.horaInicio) < toMin(fimEl.value) &&
+      toMin(a.horaFim)    > toMin(inicioEl.value)
+    );
+    if (conflito) {
+      showToast(
+        `Laboratório já ocupado das ${conflito.horaInicio} às ${conflito.horaFim} (${conflito.titulo}). Escolha outro horário.`,
+        "warning"
+      );
+      [inicioEl, fimEl].forEach(el => el.classList.add("field-error"));
+      return;
+    }
 
     agend.titulo      = nomeEl.value.trim();
     agend.data        = dataEl.value;
@@ -3475,6 +3514,8 @@ function openVisualizarModal(id) {
     const el = document.getElementById(fid);
     if (el) el.readOnly = !canEdit;
   });
+  const roteiroWrap = document.getElementById("view-agend-roteiro")?.closest(".modal-field");
+  if (roteiroWrap) roteiroWrap.style.display = canEdit ? "" : "none";
   const roteiroEl = document.getElementById("view-agend-roteiro");
   if (roteiroEl) roteiroEl.disabled = !canEdit;
 
@@ -3548,15 +3589,23 @@ function buildReservasCalSection() {
 
   const dayCols = days.map(d => {
     const dateStr = toDateStr(d);
-    const events  = agendamentos.filter(a => a.data === dateStr).map(evt => {
+    const dayEvts = agendamentos.filter(a => a.data === dateStr);
+    const layout  = layoutDayEvents(dayEvts);
+    const N = layout.total;
+
+    const events = dayEvts.map(evt => {
+      const col = layout.assignments.get(evt.id) || 0;
       const [sh, sm] = evt.horaInicio.split(":").map(Number);
       const [eh, em] = evt.horaFim.split(":").map(Number);
       const top    = (sh - CAL_START) * HOUR_PX + (sm / 60) * HOUR_PX;
       const height = (eh - sh) * HOUR_PX + ((em - sm) / 60) * HOUR_PX;
       const si     = RESERVA_STATUS_MAP[evt.status] || RESERVA_STATUS_ALIAS[evt.status] || { calCls: "green", icon: "event" };
+      const colStyle = N > 1
+        ? `left:calc(${(col / N * 100).toFixed(1)}% + 3px);right:auto;width:calc(${(100 / N).toFixed(1)}% - 6px);`
+        : `left:4px;right:4px;`;
       return `
         <div class="cal-event cal-event-${si.calCls}" data-reserva-id="${evt.id}"
-             style="top:${top}px;height:${height}px;cursor:pointer">
+             style="top:${top}px;height:${height}px;cursor:pointer;${colStyle}">
           <div class="cal-evt-hdr">
             <span class="cal-evt-time">${evt.horaInicio} – ${evt.horaFim}</span>
             <span class="material-symbols-rounded cal-evt-icon">${si.icon}</span>
@@ -3648,10 +3697,6 @@ function buildAgendInfoGrid(agend) {
       <div class="doc-info-cell">
         <span class="doc-info-label">Horário</span>
         <span class="doc-info-value">${agend.horaInicio} – ${agend.horaFim}</span>
-      </div>
-      <div class="doc-info-cell">
-        <span class="doc-info-label">Roteiro</span>
-        <span class="doc-info-value">${agend.roteiro || "—"}</span>
       </div>
       <div class="doc-info-cell">
         <span class="doc-info-label">Status</span>
@@ -4423,6 +4468,9 @@ function renderMeuPerfil() {
 
   document.getElementById("main-content").innerHTML = `
     <div class="perfil-page">
+
+      <h1 class="page-section-title">Meu Perfil</h1>
+      <p class="page-section-sub">Gerencie seu avatar e suas informações de acesso.</p>
 
       <div class="perfil-card">
         <h3 class="perfil-section-title">

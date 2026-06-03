@@ -1666,6 +1666,7 @@ tbody tr:last-child td {
   border-radius: var(--radius-xl);
   width: 100%;
   max-width: 520px;
+  max-height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(17, 24, 39, .14), 0 4px 16px rgba(17, 24, 39, .06);
@@ -1717,7 +1718,11 @@ tbody tr:last-child td {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: none;
 }
+.modal-body::-webkit-scrollbar { display: none; }
 
 .modal-footer {
   display: flex;

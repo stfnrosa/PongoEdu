@@ -90,8 +90,8 @@
     "roteiro": "O Ar Ocupa Espaço",
     "turma": "6º Ano D",
     "data": "2026-06-06",
-    "horaInicio": "10:00",
-    "horaFim": "11:30",
+    "horaInicio": "11:00",
+    "horaFim": "12:30",
     "status": "pendente",
     "observacoes": ""
   },
@@ -150,8 +150,8 @@
     "roteiro": "Eletroquímica Básica",
     "turma": "3º Ano A",
     "data": "2026-06-04",
-    "horaInicio": "14:00",
-    "horaFim": "16:00",
+    "horaInicio": "14:30",
+    "horaFim": "16:30",
     "status": "preparado",
     "observacoes": ""
   },
