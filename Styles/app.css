@@ -2548,6 +2548,26 @@ tbody tr:last-child td {
   color: var(--orange);
 }
 
+.conflict-alert-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #fff0f0;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b91c1c;
+  margin-bottom: 4px;
+}
+
+.conflict-alert-box .material-symbols-rounded {
+  font-size: 18px;
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
 .material-alert {
   display: flex;
   align-items: center;

@@ -2861,6 +2861,11 @@ function buildCriarAgendamentoModal() {
             </div>
           </div>
 
+          <div class="conflict-alert-box" id="conflict-alert-box" style="display:none">
+            <span class="material-symbols-rounded">event_busy</span>
+            <span id="conflict-alert-text"></span>
+          </div>
+
           <div class="modal-row">
             <div class="modal-field">
               <label>Roteiro</label>
@@ -3030,6 +3035,36 @@ function bindCalendarEvents() {
     populateMateriaisFromRoteiro(e.target.value);
   });
 
+  const checkConflito = () => {
+    const data   = document.getElementById("agend-data")?.value;
+    const inicio = document.getElementById("agend-inicio")?.value;
+    const fim    = document.getElementById("agend-fim")?.value;
+    const alertBox  = document.getElementById("conflict-alert-box");
+    const alertText = document.getElementById("conflict-alert-text");
+    const confirmBtn = document.getElementById("agend-confirm-btn");
+    if (!data || !inicio || !fim || !alertBox) return;
+
+    const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+    const conflito = (appData.agendamentos || []).find(a =>
+      a.data === data &&
+      toMin(a.horaInicio) < toMin(fim) &&
+      toMin(a.horaFim)    > toMin(inicio)
+    );
+
+    if (conflito) {
+      alertBox.style.display = "flex";
+      alertText.textContent  = `Laboratório já ocupado das ${conflito.horaInicio} às ${conflito.horaFim}. Escolha outro horário.`;
+      if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.opacity = ".45"; }
+    } else {
+      alertBox.style.display = "none";
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.style.opacity = ""; }
+    }
+  };
+
+  ["agend-data", "agend-inicio", "agend-fim"].forEach(id => {
+    document.getElementById(id)?.addEventListener("change", checkConflito);
+  });
+
   // View/Edit modal
   const closeViewModal = () => document.getElementById("view-agend-modal")?.classList.remove("open");
   document.getElementById("view-agend-modal-close")?.addEventListener("click", closeViewModal);
@@ -3118,6 +3153,30 @@ function bindCalendarEvents() {
       if (!el?.value?.trim()) { el.classList.add("field-error"); valid = false; }
     });
     if (!valid) return;
+
+    // Verificar conflito de horário no laboratório
+    const dataVal   = dataEl.value;
+    const inicioVal = inicioEl.value;
+    const fimVal    = fimEl.value;
+
+    const toMin = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+    const novoInicio = toMin(inicioVal);
+    const novoFim    = toMin(fimVal);
+
+    const conflito = (appData.agendamentos || []).find(a =>
+      a.data === dataVal &&
+      toMin(a.horaInicio) < novoFim &&
+      toMin(a.horaFim)    > novoInicio
+    );
+
+    if (conflito) {
+      showToast(
+        `Laboratório já ocupado das ${conflito.horaInicio} às ${conflito.horaFim} (${conflito.titulo}). Escolha outro horário.`,
+        "warning"
+      );
+      [inicioEl, fimEl].forEach(el => el.classList.add("field-error"));
+      return;
+    }
 
     // Coletar materiais com controlaEstoque = true e verificar estoque
     const matRows   = document.querySelectorAll("#agend-materiais-list .material-row");
