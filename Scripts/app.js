@@ -79,7 +79,7 @@ let currentUser = null;
 let currentProfile = null;
 
 let localProdutos = null;
-let produtosFilter = { search: "", status: "all" };
+let produtosFilter = { search: "", status: "all", categoria: "all" };
 let currentEditId = null;
 
 let localCategorias = null;
@@ -1048,23 +1048,39 @@ function renderProdutos() {
         </label>
 
         <div class="filter-dropdown-wrap">
-          <button class="filter-btn ${produtosFilter.status !== "all" ? "active-filter" : ""}" id="status-filter-btn">
-            <span class="material-symbols-rounded">filter_list</span>
-            Filtrar status
-            <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
-          </button>
-          <div class="filter-dropdown-menu" id="status-filter-menu">
-            ${[
-              { key: "all", label: "Todos" },
-              { key: "normal", label: "Normal" },
-              { key: "estoque-baixo", label: "Estoque baixo" },
-              { key: "vencido", label: "Vencido" }
-            ].map(s => `
-              <div class="filter-option ${produtosFilter.status === s.key ? "active" : ""}" data-status="${s.key}">
-                ${s.label}
-              </div>
-            `).join("")}
-          </div>
+          ${isAuxiliar ? `
+            <button class="filter-btn ${produtosFilter.status !== "all" ? "active-filter" : ""}" id="status-filter-btn">
+              <span class="material-symbols-rounded">filter_list</span>
+              Filtrar status
+              <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
+            </button>
+            <div class="filter-dropdown-menu" id="status-filter-menu">
+              ${[
+                { key: "all", label: "Todos" },
+                { key: "normal", label: "Normal" },
+                { key: "estoque-baixo", label: "Estoque baixo" },
+                { key: "vencido", label: "Vencido" }
+              ].map(s => `
+                <div class="filter-option ${produtosFilter.status === s.key ? "active" : ""}" data-status="${s.key}">
+                  ${s.label}
+                </div>
+              `).join("")}
+            </div>
+          ` : `
+            <button class="filter-btn ${produtosFilter.categoria !== "all" ? "active-filter" : ""}" id="categoria-filter-btn">
+              <span class="material-symbols-rounded">filter_list</span>
+              Filtrar categoria
+              <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
+            </button>
+            <div class="filter-dropdown-menu" id="categoria-filter-menu">
+              <div class="filter-option ${produtosFilter.categoria === "all" ? "active" : ""}" data-categoria="all">Todas</div>
+              ${[...new Set((localProdutos || []).map(p => p.categoria).filter(Boolean))].map(cat => `
+                <div class="filter-option ${produtosFilter.categoria === cat ? "active" : ""}" data-categoria="${cat}">
+                  ${cat}
+                </div>
+              `).join("")}
+            </div>
+          `}
         </div>
 
         <button class="export-btn-outline" id="produtos-export-btn">
@@ -1289,9 +1305,9 @@ function renderEmprestimos() {
         <div class="list-card-header">
           <span class="list-card-title">${isAuxiliar ? "Todos os Empréstimos" : "Lista de Empréstimos"}</span>
           <div style="display:flex;align-items:center;gap:12px">
-            ${isAuxiliar && pendentes > 0
+            <span id="emp-badge">${isAuxiliar && pendentes > 0
               ? `<span class="badge rounded-pill" style="background:#fff8e6;color:#b45309;font-size:11px;font-weight:700;padding:5px 12px">${pendentes} pendente(s)</span>`
-              : resultBadge(empData.length)}
+              : resultBadge(empData.length)}</span>
             ${!isAuxiliar ? btnCreate({ id: "new-emprestimo-btn", label: "Criar Empréstimo" }) : ""}
           </div>
         </div>
@@ -1520,6 +1536,7 @@ function openViewEmprestimo(e, isAuxiliar) {
           const container = document.getElementById("emp-list-container");
           if (container) container.innerHTML = buildEmprestimosList(appData.emprestimos, true);
           bindEmpTableButtons(true);
+          refreshEmpBadge(true);
           showToast("Empréstimo aceito com sucesso!");
         },
       });
@@ -1537,11 +1554,22 @@ function openViewEmprestimo(e, isAuxiliar) {
           const container = document.getElementById("emp-list-container");
           if (container) container.innerHTML = buildEmprestimosList(appData.emprestimos, true);
           bindEmpTableButtons(true);
+          refreshEmpBadge(true);
           showToast("Empréstimo recusado.", "warning");
         },
       });
     };
   }
+}
+
+function refreshEmpBadge(isAuxiliar) {
+  const empData  = appData.emprestimos || [];
+  const pendentes = empData.filter(e => e.status === "pendente").length;
+  const badge    = document.getElementById("emp-badge");
+  if (!badge) return;
+  badge.innerHTML = isAuxiliar && pendentes > 0
+    ? `<span class="badge rounded-pill" style="background:#fff8e6;color:#b45309;font-size:11px;font-weight:700;padding:5px 12px">${pendentes} pendente(s)</span>`
+    : resultBadge(empData.length);
 }
 
 function bindEmpTableButtons(isAuxiliar) {
@@ -1570,6 +1598,7 @@ function bindEmpTableButtons(isAuxiliar) {
             const container = document.getElementById("emp-list-container");
             if (container) container.innerHTML = buildEmprestimosList(empData, true);
             bindEmpTableButtons(true);
+            refreshEmpBadge(true);
             showToast("Empréstimo aceito com sucesso!");
           },
         });
@@ -1591,6 +1620,7 @@ function bindEmpTableButtons(isAuxiliar) {
             const container = document.getElementById("emp-list-container");
             if (container) container.innerHTML = buildEmprestimosList(empData, true);
             bindEmpTableButtons(true);
+            refreshEmpBadge(true);
             showToast("Empréstimo recusado.", "warning");
           },
         });
@@ -1637,16 +1667,19 @@ function getFilteredProdutos() {
       p.nome.toLowerCase().includes(q) ||
       p.codigo.toLowerCase().includes(q) ||
       p.localizacao.toLowerCase().includes(q);
-    const matchStatus = produtosFilter.status === "all" || p.status === produtosFilter.status;
-    return matchSearch && matchStatus;
+    const matchStatus   = produtosFilter.status   === "all" || p.status    === produtosFilter.status;
+    const matchCategoria = produtosFilter.categoria === "all" || p.categoria === produtosFilter.categoria;
+    return matchSearch && matchStatus && matchCategoria;
   });
 }
 
 function buildProdutosTable(produtos, isAuxiliar) {
   const statusLabels = { normal: "Normal", "estoque-baixo": "Estoque baixo", vencido: "Vencido" };
 
+  const colCount = isAuxiliar ? 7 : 6;
+
   const rows = produtos.length === 0
-    ? `<tr class="table-empty-row"><td colspan="7">Nenhum produto encontrado.</td></tr>`
+    ? `<tr class="table-empty-row"><td colspan="${colCount}">Nenhum produto encontrado.</td></tr>`
     : produtos.map(p => `
         <tr>
           <td>
@@ -1662,7 +1695,7 @@ function buildProdutosTable(produtos, isAuxiliar) {
               ${p.localizacao}
             </div>
           </td>
-          <td><span class="status-pill ${p.status}">${statusLabels[p.status] || p.status}</span></td>
+          ${isAuxiliar ? `<td><span class="status-pill ${p.status}">${statusLabels[p.status] || p.status}</span></td>` : ""}
           <td>
             <div class="action-cell">
               <button class="action-icon-btn" title="Visualizar" data-view-produto-id="${p.id}">
@@ -1700,7 +1733,7 @@ function buildProdutosTable(produtos, isAuxiliar) {
                 <th>Quantidade</th>
                 <th>Validade</th>
                 <th>Localização</th>
-                <th>Status</th>
+                ${isAuxiliar ? "<th>Status</th>" : ""}
                 <th>Ações</th>
               </tr>
             </thead>
@@ -1951,7 +1984,7 @@ function bindProdutosEvents(isAuxiliar) {
     exportCSV("produtos.csv", headers, rows);
   });
 
-  const statusBtn = document.getElementById("status-filter-btn");
+  const statusBtn  = document.getElementById("status-filter-btn");
   const statusMenu = document.getElementById("status-filter-menu");
 
   statusBtn?.addEventListener("click", e => {
@@ -1972,7 +2005,31 @@ function bindProdutosEvents(isAuxiliar) {
     });
   });
 
-  document.addEventListener("click", () => statusMenu?.classList.remove("open"), { once: false });
+  const categoriaBtn  = document.getElementById("categoria-filter-btn");
+  const categoriaMenu = document.getElementById("categoria-filter-menu");
+
+  categoriaBtn?.addEventListener("click", e => {
+    e.stopPropagation();
+    categoriaMenu.classList.toggle("open");
+  });
+
+  categoriaMenu?.querySelectorAll(".filter-option").forEach(opt => {
+    opt.addEventListener("click", e => {
+      e.stopPropagation();
+      produtosFilter.categoria = opt.dataset.categoria;
+      categoriaMenu.classList.remove("open");
+      categoriaBtn.classList.toggle("active-filter", produtosFilter.categoria !== "all");
+      categoriaMenu.querySelectorAll(".filter-option").forEach(o =>
+        o.classList.toggle("active", o.dataset.categoria === produtosFilter.categoria)
+      );
+      refreshProdutosTable(isAuxiliar);
+    });
+  });
+
+  document.addEventListener("click", () => {
+    statusMenu?.classList.remove("open");
+    categoriaMenu?.classList.remove("open");
+  }, { once: false });
 
   bindTableButtons(isAuxiliar);
 
@@ -3652,10 +3709,8 @@ function bindReservasEvents() {
    ================================================================ */
 
 const MOV_TIPO_MAP = {
-  entrada:   { label: "Entrada",   icon: "add_circle",   color: "var(--green)",  cls: "mov-tipo-entrada"   },
-  saida:     { label: "Saída",     icon: "remove_circle", color: "var(--orange)", cls: "mov-tipo-saida"     },
-  compra:    { label: "Compra",    icon: "shopping_bag",  color: "var(--blue)",   cls: "mov-tipo-compra"    },
-  emprestimo:{ label: "Empréstimo",icon: "swap_horiz",    color: "var(--purple)", cls: "mov-tipo-emprestimo"},
+  entrada: { label: "Entrada", icon: "add_circle",    color: "var(--green)"  },
+  saida:   { label: "Saída",   icon: "remove_circle", color: "var(--orange)" },
 };
 
 const MOV_STATUS_MAP = {
@@ -3690,8 +3745,6 @@ function renderMovimentacoes() {
             <div class="filter-option active" data-mov-tipo="all">Todos</div>
             <div class="filter-option" data-mov-tipo="entrada">Entrada</div>
             <div class="filter-option" data-mov-tipo="saida">Saída</div>
-            <div class="filter-option" data-mov-tipo="compra">Compra</div>
-            <div class="filter-option" data-mov-tipo="emprestimo">Empréstimo</div>
           </div>
         </div>
         <button class="export-btn-outline" id="mov-export-btn">

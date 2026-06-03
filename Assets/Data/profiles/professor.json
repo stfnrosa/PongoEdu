@@ -14,7 +14,7 @@
       "label": "Estoque",
       "icon": "inventory_2",
       "type": "group",
-      "defaultOpen": true,
+      "defaultOpen": false,
       "children": [
         {
           "id": "produtos",
@@ -35,7 +35,7 @@
       "label": "Agendamentos",
       "icon": "calendar_month",
       "type": "group",
-      "defaultOpen": true,
+      "defaultOpen": false,
       "children": [
         {
           "id": "roteiros",

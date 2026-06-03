@@ -8,21 +8,42 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400..700,0..1,-50..200" rel="stylesheet" />
   <link rel="stylesheet" href="../Styles/home.css" />
 </head>
 
 <body>
+  <div class="bg-decorations" aria-hidden="true">
+    <div class="bg-circle circle-left-top"></div>
+    <div class="bg-circle circle-right-top"></div>
+    <div class="bg-circle circle-right-bottom"></div>
+    <div class="bg-circle circle-left-bottom"></div>
+    <div class="bg-circle circle-center-top"></div>
+    <div class="bg-circle circle-mid-right"></div>
+    <div class="bg-circle circle-mid-left"></div>
+
+    <div class="dot dot-green-1"></div>
+    <div class="dot dot-blue-1"></div>
+    <div class="dot dot-purple-1"></div>
+    <div class="dot dot-green-2"></div>
+    <div class="dot dot-blue-2"></div>
+    <div class="dot dot-purple-2"></div>
+    <div class="dot dot-green-3"></div>
+    <div class="dot dot-purple-3"></div>
+    <div class="dot dot-blue-3"></div>
+    <div class="dot dot-green-4"></div>
+  </div>
+
   <nav class="navbar">
     <div class="container navbar-inner">
-      <div class="d-flex align-items-center gap-3">
+      <a href="home.html" class="d-flex align-items-center gap-3 text-decoration-none">
         <img src="../Assets/Imagens/Pongo.svg" class="logo-img" alt="PongoEdu">
         <div>
           <div class="brand-title"><span>Pongo</span><span>Edu</span></div>
           <div class="brand-subtitle">Gestão de Laboratórios</div>
         </div>
-      </div>
+      </a>
 
       <div class="nav-btns d-flex gap-2">
         <a href="entrar.html" class="btn btn-outline-purple">
@@ -37,151 +58,54 @@
   <main>
     <section class="hero">
       <div class="container">
-        <div class="row align-items-center g-5">
-          <div class="col-lg-6">
-            <div class="badge-soft">
-              <span class="material-symbols-rounded">experiment</span>
-              Plataforma de Gestão de Laboratórios
-            </div>
-
-            <h1>
-              Gestão de laboratórios simples e eficiente para <span>auxiliares e professores</span>
-            </h1>
-
-            <p class="hero-text">
-              Centralize agendamentos, controle o estoque, prepare práticas e acompanhe tudo o que acontece no laboratório em um só lugar.
-            </p>
-
-            <div class="d-flex flex-column flex-sm-row gap-3 mb-4">
-              <a href="criar-conta.html" class="btn btn-green">
-                Conhecer funcionalidades
-                <span class="material-symbols-rounded">arrow_forward</span>
-              </a>
-              <a href="criar-conta.html" class="btn btn-demo">
-                <span class="material-symbols-rounded icon-fill">play_arrow</span>
-                Ver demonstração
-              </a>
-            </div>
-
-            <div class="row g-4">
-              <div class="col-6">
-                <div class="mini-benefit">
-                  <span class="material-symbols-rounded green">shield</span>
-                  <div><strong class="green">Mais segurança</strong>Controle de materiais e processos</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="mini-benefit">
-                  <span class="material-symbols-rounded purple">schedule</span>
-                  <div><strong class="purple">Mais agilidade</strong>Fluxos rápidos para ganhar tempo</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="mini-benefit">
-                  <span class="material-symbols-rounded orange">monitoring</span>
-                  <div><strong>Mais controle</strong>Informações sempre atualizadas</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="mini-benefit">
-                  <span class="material-symbols-rounded blue">groups</span>
-                  <div><strong class="blue">Mais colaboração</strong>Equipe alinhada e tarefas organizadas</div>
-                </div>
-              </div>
-            </div>
+        <div class="hero-inner">
+          <div class="badge-soft">
+            <span class="material-symbols-rounded">experiment</span>
+            Plataforma de Gestão de Laboratórios
           </div>
 
-          <div class="col-lg-6">
-            <div class="dashboard-card">
-              <h4 class="fw-bold mb-1">Olá, Auxiliar! 👋</h4>
-              <p class="text-muted mb-4">Confira o resumo do laboratório</p>
+          <h1>
+            Gestão de laboratórios simples e eficiente para <span>auxiliares e professores</span>
+          </h1>
 
-              <div class="row g-3 mb-4">
-                <div class="col-6">
-                  <div class="metric-card">
-                    <div class="icon-box bg-green-soft"><span class="material-symbols-rounded">calendar_month</span></div>
-                    <div class="metric-value">2</div>
-                    <div class="metric-label">Agendamentos de hoje</div>
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="metric-card">
-                    <div class="icon-box bg-purple-soft"><span class="material-symbols-rounded">experiment</span></div>
-                    <div class="metric-value">3</div>
-                    <div class="metric-label">Práticas para preparar</div>
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="metric-card">
-                    <div class="icon-box bg-orange-soft"><span class="material-symbols-rounded">shopping_cart</span></div>
-                    <div class="metric-value">4</div>
-                    <div class="metric-label">Solicitações pendentes</div>
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="metric-card">
-                    <div class="icon-box bg-blue-soft"><span class="material-symbols-rounded">assignment_turned_in</span></div>
-                    <div class="metric-value">1</div>
-                    <div class="metric-label">Entrada registrada</div>
-                  </div>
-                </div>
-              </div>
+          <p class="hero-text">
+            Centralize agendamentos, controle o estoque, prepare práticas e acompanhe tudo o que acontece no laboratório em um só lugar.
+          </p>
 
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <div class="panel-card">
-                    <div class="d-flex justify-content-between mb-3">
-                      <div class="panel-title">Próximos agendamentos</div>
-                      <a href="#" class="panel-link">Ver agenda <span class="material-symbols-rounded">arrow_forward</span></a>
-                    </div>
+          <div class="hero-actions">
+            <a href="criar-conta.html" class="btn btn-green">
+              Conhecer funcionalidades
+              <span class="material-symbols-rounded">arrow_forward</span>
+            </a>
+            <a href="criar-conta.html" class="btn btn-demo">
+              <span class="material-symbols-rounded icon-fill">play_arrow</span>
+              Ver demonstração
+            </a>
+          </div>
 
-                    <div class="schedule-item">
-                      <div class="icon-box bg-green-soft mb-0"><span class="material-symbols-rounded">science</span></div>
-                      <div><strong>Titulação Ácido-Base</strong><br><small class="text-muted">Hoje · 10h - 11h</small></div>
-                      <span class="status-pill pill-red">Amanhã</span>
-                    </div>
-
-                    <div class="schedule-item">
-                      <div class="icon-box bg-purple-soft mb-0"><span class="material-symbols-rounded">experiment</span></div>
-                      <div><strong>Destilação da Água</strong><br><small class="text-muted">02/06 · 14h - 15h</small></div>
-                      <span class="status-pill pill-orange">3 dias</span>
-                    </div>
-
-                    <div class="schedule-item">
-                      <div class="icon-box bg-purple-soft mb-0"><span class="material-symbols-rounded">experiment</span></div>
-                      <div><strong>Reação de Oxidação</strong><br><small class="text-muted">03/06 · 10h - 11h</small></div>
-                      <span class="status-pill pill-orange">4 dias</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="col-md-6">
-                  <div class="panel-card">
-                    <div class="d-flex justify-content-between mb-3">
-                      <div class="panel-title">Estoque em alerta</div>
-                      <a href="#" class="panel-link">Ver estoque <span class="material-symbols-rounded">arrow_forward</span></a>
-                    </div>
-
-                    <div class="stock-item">
-                      <div class="icon-box bg-green-soft mb-0"><span class="material-symbols-rounded">inventory_2</span></div>
-                      <div><strong>Ácido Clorídrico</strong><br><small class="text-muted">2 frascos</small></div>
-                      <span class="status-pill pill-red">Baixo</span>
-                    </div>
-
-                    <div class="stock-item">
-                      <div class="icon-box bg-green-soft mb-0"><span class="material-symbols-rounded">package_2</span></div>
-                      <div><strong>Luvas Descartáveis</strong><br><small class="text-muted">1 caixa</small></div>
-                      <span class="status-pill pill-red">Baixo</span>
-                    </div>
-
-                    <div class="stock-item">
-                      <div class="icon-box bg-green-soft mb-0"><span class="material-symbols-rounded">straighten</span></div>
-                      <div><strong>Pipeta Pasteur</strong><br><small class="text-muted">3 pacotes</small></div>
-                      <span class="status-pill pill-green">Normal</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <div class="hero-benefits">
+            <div class="mini-benefit">
+              <div class="mini-benefit-icon bg-green-soft"><span class="material-symbols-rounded green">shield</span></div>
+              <strong class="green">Mais segurança</strong>
+              <span>Controle de materiais e processos</span>
+            </div>
+            <span class="benefit-arrow">→</span>
+            <div class="mini-benefit">
+              <div class="mini-benefit-icon bg-purple-soft"><span class="material-symbols-rounded purple">schedule</span></div>
+              <strong class="purple">Mais agilidade</strong>
+              <span>Fluxos rápidos para ganhar tempo</span>
+            </div>
+            <span class="benefit-arrow">→</span>
+            <div class="mini-benefit">
+              <div class="mini-benefit-icon bg-orange-soft"><span class="material-symbols-rounded orange">monitoring</span></div>
+              <strong>Mais controle</strong>
+              <span>Informações sempre atualizadas</span>
+            </div>
+            <span class="benefit-arrow">→</span>
+            <div class="mini-benefit">
+              <div class="mini-benefit-icon bg-blue-soft"><span class="material-symbols-rounded blue">groups</span></div>
+              <strong class="blue">Mais colaboração</strong>
+              <span>Equipe alinhada e tarefas organizadas</span>
             </div>
           </div>
         </div>

@@ -14,7 +14,7 @@
       "label": "Estoque",
       "icon": "inventory_2",
       "type": "group",
-      "defaultOpen": true,
+      "defaultOpen": false,
       "children": [
         {
           "id": "produtos",
@@ -41,7 +41,7 @@
       "label": "Solicitações",
       "icon": "shopping_cart",
       "type": "group",
-      "defaultOpen": true,
+      "defaultOpen": false,
       "children": [
         {
           "id": "compras",
