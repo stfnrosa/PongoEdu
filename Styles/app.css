@@ -68,12 +68,13 @@
 .btn-pongo.btn-danger:hover { background-color: #e8002e; border-color: #e8002e; }
 
 .btn-pongo.btn-outline-secondary {
-  border-color: var(--border);
-  color: var(--muted);
-}
-.btn-pongo.btn-outline-secondary:hover {
   background: #f5f7fa;
   border-color: #c8d1e0;
+  color: var(--dark);
+}
+.btn-pongo.btn-outline-secondary:hover {
+  background: #ebeef3;
+  border-color: #b0bcd0;
   color: var(--dark);
 }
 
@@ -1646,15 +1647,14 @@ tbody tr:last-child td {
   justify-content: center;
   padding: 20px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
   opacity: 0;
   pointer-events: none;
   transition: opacity .2s;
 }
+.modal-overlay::-webkit-scrollbar { display: none; }
 
-.modal-overlay::-webkit-scrollbar { width: 6px; }
-.modal-overlay::-webkit-scrollbar-track { background: transparent; }
-.modal-overlay::-webkit-scrollbar-thumb { background: #dce4f2; border-radius: 99px; }
-.modal-overlay::-webkit-scrollbar-thumb:hover { background: #b8c4d8; }
 
 .modal-overlay.open {
   opacity: 1;
@@ -1666,7 +1666,6 @@ tbody tr:last-child td {
   border-radius: var(--radius-xl);
   width: 100%;
   max-width: 520px;
-  max-height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(17, 24, 39, .14), 0 4px 16px rgba(17, 24, 39, .06);
@@ -1718,11 +1717,7 @@ tbody tr:last-child td {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow-y: auto;
-  flex: 1;
-  scrollbar-width: none;
 }
-.modal-body::-webkit-scrollbar { display: none; }
 
 .modal-footer {
   display: flex;

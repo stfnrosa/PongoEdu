@@ -2868,12 +2868,11 @@ function buildCriarAgendamentoModal() {
             <input type="text" id="agend-nome" placeholder="Ex: Titulação Ácido-Base">
           </div>
 
-          <div class="modal-field">
-            <label>Data <span class="required-star">*</span></label>
-            <input type="date" id="agend-data">
-          </div>
-
-          <div class="modal-row">
+          <div class="modal-row-3">
+            <div class="modal-field">
+              <label>Data <span class="required-star">*</span></label>
+              <input type="date" id="agend-data">
+            </div>
             <div class="modal-field">
               <label>Hora início <span class="required-star">*</span></label>
               <input type="time" id="agend-inicio" value="10:00">
@@ -2930,10 +2929,7 @@ function buildCriarAgendamentoModal() {
 
         <div class="modal-footer">
           ${btnModalCancel({ id: "agend-modal-cancel" })}
-          <div class="agend-footer-actions">
-            <button class="btn-enviar-analise" id="btn-enviar-analise" style="display:none">Enviar para análise</button>
-            ${btnModalConfirm({ id: "agend-confirm-btn", label: "Confirmar agendamento" })}
-          </div>
+          ${btnModalConfirm({ id: "agend-confirm-btn", label: "Confirmar agendamento" })}
         </div>
       </div>
     </div>
@@ -3052,10 +3048,10 @@ function bindCalendarEvents() {
     if (e.target === e.currentTarget) closeModal();
   });
 
-  document.querySelector(".add-mat-btn")?.addEventListener("click", () => addMaterialRow());
+  document.querySelector(".add-mat-btn")?.addEventListener("click", () => addMaterialRow("", "", "agend-materiais-list", false));
 
   document.getElementById("agend-roteiro")?.addEventListener("change", e => {
-    populateMateriaisFromRoteiro(e.target.value);
+    populateMateriaisFromRoteiro(e.target.value, "agend-materiais-list", false);
   });
 
   const checkConflito = () => {
@@ -3230,10 +3226,9 @@ function bindCalendarEvents() {
       }
     });
 
-    const criarAgendamento = (gerarSolicitacao = false) => {
-      const agId = String(Date.now());
+    const criarAgendamento = () => {
       appData.agendamentos.push({
-        id:          agId,
+        id:          String(Date.now()),
         titulo:      nomeEl.value.trim(),
         roteiro:     document.getElementById("agend-roteiro")?.value || "",
         turma:       document.getElementById("agend-turma")?.value.trim() || "",
@@ -3243,44 +3238,20 @@ function bindCalendarEvents() {
         horaFim:     fimEl.value,
         status:      "pendente",
       });
-
-      if (gerarSolicitacao) {
-        semEstoque.forEach(prod => {
-          criarSolicitacao({
-            produtoId:            prod.id,
-            produto:              prod.nome,
-            unidadeMedida:        prod.unidadeMedida || "",
-            quantidadeSolicitada: prod.estoqueMinimo || 0,
-            quantidadeDisponivel: prod.quantidade,
-            estoqueMinimo:        prod.estoqueMinimo || 0,
-            origem:               "professor",
-            solicitante:          currentUser.name,
-            agendamentoId:        agId,
-            observacoes:          `Solicitado via agendamento "${nomeEl.value.trim()}"`,
-          });
-        });
-      }
-
       document.getElementById("criar-agend-modal")?.classList.remove("open");
       refreshCalendar();
     };
 
     if (semEstoque.length > 0) {
-      const nomes = semEstoque.map(p => p.nome).join(", ");
-      showConfirmModal({
-        title:        "Estoque Insuficiente",
-        message:      `Um ou mais materiais necessários para esta prática não possuem quantidade suficiente em estoque (${nomes}). Deseja prosseguir com o agendamento e gerar uma solicitação de compra?`,
-        confirmLabel: "Prosseguir e Solicitar Compra",
-        confirmIcon:  "shopping_cart",
-        danger:       false,
-        onConfirm:    () => {
-          criarAgendamento(true);
-          showToast("Agendamento realizado com sucesso. Uma solicitação de compra foi encaminhada para análise da equipe auxiliar.");
-        },
-      });
-    } else {
-      criarAgendamento(false);
+      const nomes = semEstoque.map(p => `"${p.nome}"`).join(", ");
+      showToast(
+        `Agendamento bloqueado: ${nomes} ${semEstoque.length === 1 ? "está" : "estão"} com estoque insuficiente ou vencido. Solicite a reposição antes de agendar.`,
+        "warning"
+      );
+      return;
     }
+
+    criarAgendamento(false);
   });
 
   [document.getElementById("agend-nome"), document.getElementById("agend-data"),
@@ -3413,7 +3384,7 @@ function addMaterialRow(produtoId = "", qty = "", listId = "agend-materiais-list
   }
 }
 
-function populateMateriaisFromRoteiro(roteiro, listId = "agend-materiais-list") {
+function populateMateriaisFromRoteiro(roteiro, listId = "agend-materiais-list", showStatus = true) {
   const list = document.getElementById(listId);
   if (!list) return;
   list.innerHTML = "";
@@ -3427,7 +3398,7 @@ function populateMateriaisFromRoteiro(roteiro, listId = "agend-materiais-list") 
     list.innerHTML = `<div class="materiais-empty-hint">Este roteiro não possui materiais cadastrados.</div>`;
     return;
   }
-  materiais.forEach(m => addMaterialRow(m.produtoId, m.qty, listId));
+  materiais.forEach(m => addMaterialRow(m.produtoId, m.qty, listId, showStatus));
 }
 
 function populateViewMateriais(roteiro, readonly) {
