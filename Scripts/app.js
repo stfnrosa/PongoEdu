@@ -1761,7 +1761,7 @@ function getFilteredProdutos() {
 function buildProdutosTable(produtos, isAuxiliar) {
   const statusLabels = { normal: "Normal", "estoque-baixo": "Estoque baixo", vencido: "Vencido" };
 
-  const colCount = isAuxiliar ? 8 : 7;
+  const colCount = isAuxiliar ? 8 : 6;
 
   const rows = produtos.length === 0
     ? `<tr class="table-empty-row"><td colspan="${colCount}">Nenhum produto encontrado.</td></tr>`
@@ -1771,7 +1771,7 @@ function buildProdutosTable(produtos, isAuxiliar) {
           <td>${p.nome}</td>
           <td>${p.categoria}</td>
           <td>${fmtQty(p)}</td>
-          <td>${p.validade}</td>
+          ${isAuxiliar ? `<td>${p.validade}</td>` : ""}
           <td>
             <div class="localizacao-cell">
               <span class="material-symbols-rounded" style="font-size:15px;color:var(--muted)">location_on</span>
@@ -1815,7 +1815,7 @@ function buildProdutosTable(produtos, isAuxiliar) {
                 <th>Produto</th>
                 <th>Categoria</th>
                 <th>Quantidade</th>
-                <th>Validade</th>
+                ${isAuxiliar ? "<th>Validade</th>" : ""}
                 <th>Localização</th>
                 ${isAuxiliar ? "<th>Status</th>" : ""}
                 <th>Ações</th>
