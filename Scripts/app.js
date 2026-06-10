@@ -23,8 +23,12 @@ function btnModalCancel({ id = "", label = "Cancelar" } = {}) {
   return `<button class="btn btn-outline-secondary btn-pongo" id="${id}" type="button">${label}</button>`;
 }
 
-function btnModalDanger({ id = "", label } = {}) {
-  return `<button class="btn btn-outline-danger btn-pongo" id="${id}" type="button">${label}</button>`;
+function btnModalDanger({ id = "", label, icon = "cancel" } = {}) {
+  return `
+    <button class="btn btn-danger btn-pongo fw-bold d-flex align-items-center gap-2" id="${id}" type="button">
+      <span class="material-symbols-rounded" style="font-size:17px">${icon}</span>
+      ${label}
+    </button>`;
 }
 
 function resultBadge(count, unit = "resultado(s)") {
@@ -101,7 +105,7 @@ let _empOpenModal = null;
 let movFilter = { search: "", tipo: "all" };
 
 /* ---- Modal de confirmação reutilizável ---- */
-function showConfirmModal({ title, message, confirmLabel, confirmIcon = "check", danger = false, onConfirm }) {
+function showConfirmModal({ title, message, confirmLabel, confirmIcon = "check", danger = false, onConfirm, cancelLabel, onCancel }) {
   let modal = document.getElementById("pongo-confirm-modal");
   if (!modal) {
     modal = document.createElement("div");
@@ -124,18 +128,18 @@ function showConfirmModal({ title, message, confirmLabel, confirmIcon = "check",
   document.getElementById("pcm-title").textContent   = title;
   document.getElementById("pcm-message").textContent = message;
   document.getElementById("pcm-footer").innerHTML = `
-    <button class="btn btn-outline-secondary btn-pongo" id="pcm-cancel">Cancelar</button>
+    <button class="btn btn-outline-secondary btn-pongo" id="pcm-cancel">${cancelLabel || "Cancelar"}</button>
     <button class="btn btn-pongo fw-bold d-flex align-items-center gap-2 ${danger ? "btn-danger" : "btn-success"}" id="pcm-confirm">
       <span class="material-symbols-rounded" style="font-size:17px">${confirmIcon}</span>
       ${confirmLabel}
     </button>
   `;
   modal.classList.add("open");
-  modal.onclick = e => { if (e.target === modal) modal.classList.remove("open"); };
+  modal.onclick = e => { if (e.target === modal) { modal.classList.remove("open"); if (onCancel) onCancel(); } };
 
   const close = () => modal.classList.remove("open");
   document.getElementById("pcm-confirm").addEventListener("click", () => { close(); onConfirm(); });
-  document.getElementById("pcm-cancel").addEventListener("click", close);
+  document.getElementById("pcm-cancel").addEventListener("click", () => { close(); if (onCancel) onCancel(); });
 }
 
 /* ---- Helpers de exibição e estoque ---- */
@@ -191,6 +195,100 @@ function criarSolicitacao({ produtoId, produto, unidadeMedida, quantidadeSolicit
   };
   localSolicitacoes = [nova, ...(localSolicitacoes || [])];
   return nova;
+}
+
+/* ---- Estado do modal de criar agendamento ---- */
+let _solicitacaoEnviada   = false;
+let _solicitacaoIds       = [];
+let _solicitacaoMateriais = []; // snapshot dos materiais no momento do envio
+let _conflictoBlocked     = false;
+let _stockBlocked         = false;
+
+function syncConfirmBtn() {
+  const btn = document.getElementById("agend-confirm-btn");
+  if (!btn) return;
+  const blocked     = _conflictoBlocked || _stockBlocked;
+  btn.disabled      = blocked;
+  btn.style.opacity = blocked ? ".45" : "";
+}
+
+function checkMaterialEstoque() {
+  const alertBox  = document.getElementById("estoque-alert-box");
+  const alertText = document.getElementById("estoque-alert-text");
+  const solBtn    = document.getElementById("btn-solicitar-auxiliar");
+  if (!alertBox) return;
+
+  const rows    = [...document.querySelectorAll("#agend-materiais-list .material-row")];
+  const insuf   = [];
+  const pedeSol = [];
+
+  rows.forEach(row => {
+    const id   = row.dataset.produtoId;
+    if (!id) return;
+    const prod = (localProdutos || []).find(p => p.id === id);
+    if (!prod || !prod.controlaEstoque) return;
+    const { num: qtd } = parseQty(String(row.querySelector(".mat-qty")?.textContent || ""));
+    const saldo = prod.quantidade || 0;
+    const min   = prod.estoqueMinimo || 0;
+    if (qtd > 0 && saldo < qtd) {
+      insuf.push(prod.nome);
+      if (saldo > min) pedeSol.push({ prod, qtd });
+    }
+  });
+
+  if (insuf.length === 0) {
+    alertBox.style.display = "none";
+    if (solBtn) solBtn.style.display = "none";
+    _stockBlocked = false;
+    syncConfirmBtn();
+    return { insuf: [], pedeSol: [] };
+  }
+
+  alertBox.style.display = "flex";
+  alertText.textContent = pedeSol.length === 0
+    ? "Este material está abaixo do estoque mínimo. A solicitação de compra será gerada automaticamente pelo sistema."
+    : "Não há quantidade suficiente em estoque para um ou mais materiais selecionados. O agendamento não poderá ser criado até que o estoque seja regularizado.";
+  _stockBlocked = true;
+  syncConfirmBtn();
+  if (solBtn) solBtn.style.display = (pedeSol.length > 0 && !_solicitacaoEnviada) ? "" : "none";
+
+  return { insuf, pedeSol };
+}
+
+function salvarRascunho() {
+  const nomeEl   = document.getElementById("agend-nome");
+  const dataEl   = document.getElementById("agend-data");
+  const inicioEl = document.getElementById("agend-inicio");
+  const fimEl    = document.getElementById("agend-fim");
+
+  const materiais = [];
+  document.querySelectorAll("#agend-materiais-list .material-row").forEach(row => {
+    if (row.dataset.produtoId) {
+      materiais.push({
+        produtoId:  row.dataset.produtoId,
+        nome:       row.querySelector(".mat-nome")?.textContent || "",
+        quantidade: row.querySelector(".mat-qty")?.textContent || "",
+      });
+    }
+  });
+
+  appData.agendamentos.push({
+    id:             "rasc-" + Date.now(),
+    titulo:         nomeEl?.value.trim() || "Rascunho",
+    roteiro:        document.getElementById("agend-roteiro")?.value || "",
+    turma:          document.getElementById("agend-turma")?.value.trim() || "",
+    observacoes:    document.getElementById("agend-obs")?.value.trim() || "",
+    data:           dataEl?.value || "",
+    horaInicio:     inicioEl?.value || "",
+    horaFim:        fimEl?.value || "",
+    status:         "rascunho",
+    materiais,
+    solicitacaoIds: [..._solicitacaoIds],
+    professor:      currentUser?.name || "",
+  });
+
+  refreshCalendar();
+  showToast("Agendamento salvo como rascunho. Você será notificado quando houver estoque disponível.", "success");
 }
 
 /* ---- Histórico de alterações de agendamento ---- */
@@ -2776,6 +2874,7 @@ function buildCalendarSection() {
     const isProfessor = currentUser?.profile === "professor";
     const dayEvts = agendamentos.filter(a =>
       a.data === dateStr &&
+      a.status !== "rascunho" &&
       (!isProfessor || a.professor === currentUser.name)
     );
     const layout = layoutDayEvents(dayEvts);
@@ -2920,16 +3019,22 @@ function buildCriarAgendamentoModal() {
               <div class="materiais-empty-hint">Selecione um roteiro ou clique em Adicionar para incluir materiais.</div>
             </div>
 
-            <div class="material-alert" id="material-alert-box" style="display:none">
-              <span class="material-symbols-rounded">warning</span>
-              <span id="material-alert-text"></span>
+            <div class="estoque-alert-box" id="estoque-alert-box" style="display:none">
+              <span class="material-symbols-rounded">inventory_2</span>
+              <span id="estoque-alert-text"></span>
             </div>
           </div>
         </div>
 
         <div class="modal-footer">
           ${btnModalCancel({ id: "agend-modal-cancel" })}
-          ${btnModalConfirm({ id: "agend-confirm-btn", label: "Confirmar agendamento" })}
+          <div class="agend-footer-actions">
+            <button class="btn-solicitar-auxiliar" id="btn-solicitar-auxiliar" style="display:none">
+              <span class="material-symbols-rounded" style="font-size:17px">send</span>
+              Enviar Solicitação ao Auxiliar
+            </button>
+            ${btnModalConfirm({ id: "agend-confirm-btn", label: "Confirmar agendamento" })}
+          </div>
         </div>
       </div>
     </div>
@@ -3041,14 +3146,56 @@ function bindCalendarNavEvents() {
 function bindCalendarEvents() {
   bindCalendarNavEvents();
 
-  const closeModal = () => document.getElementById("criar-agend-modal")?.classList.remove("open");
+  const forceCloseModal = () => document.getElementById("criar-agend-modal")?.classList.remove("open");
+  const closeModal = () => {
+    if (_solicitacaoEnviada && solicitacaoAindaRepresentaFormulario()) {
+      showConfirmModal({
+        title:        "Salvar Rascunho?",
+        message:      "Você enviou uma solicitação ao auxiliar, mas o agendamento ainda não pode ser criado por falta de estoque. Deseja salvar este agendamento como rascunho para continuar depois?",
+        confirmLabel: "Salvar Rascunho",
+        confirmIcon:  "edit_note",
+        cancelLabel:  "Descartar",
+        onConfirm: () => { salvarRascunho(); forceCloseModal(); },
+        onCancel:  forceCloseModal,
+      });
+      return;
+    }
+    const temDados = document.getElementById("agend-nome")?.value.trim() ||
+                     document.getElementById("agend-turma")?.value.trim() ||
+                     document.querySelectorAll("#agend-materiais-list .material-row").length > 0;
+    if (temDados) {
+      showConfirmModal({
+        title:        "Descartar alterações?",
+        message:      "Existem alterações não salvas. Deseja descartar as informações preenchidas?",
+        confirmLabel: "Descartar",
+        confirmIcon:  "delete",
+        danger:       true,
+        onConfirm:    forceCloseModal,
+      });
+      return;
+    }
+    forceCloseModal();
+  };
   document.getElementById("agend-modal-close")?.addEventListener("click", closeModal);
   document.getElementById("agend-modal-cancel")?.addEventListener("click", closeModal);
   document.getElementById("criar-agend-modal")?.addEventListener("click", e => {
     if (e.target === e.currentTarget) closeModal();
   });
 
-  document.querySelector(".add-mat-btn")?.addEventListener("click", () => addMaterialRow("", "", "agend-materiais-list", false));
+  document.querySelector(".add-mat-btn")?.addEventListener("click", () => {
+    const list = document.getElementById("agend-materiais-list");
+    const linhasIncompletas = list
+      ? [...list.querySelectorAll(".material-row")].some(r =>
+          r.querySelector(".mat-select") || !r.dataset.produtoId ||
+          !(r.querySelector(".mat-qty")?.textContent?.trim())
+        )
+      : false;
+    if (linhasIncompletas) {
+      showToast("Preencha o produto e a quantidade da linha atual antes de adicionar outra.", "warning");
+      return;
+    }
+    addMaterialRow("", "", "agend-materiais-list", false);
+  });
 
   document.getElementById("agend-roteiro")?.addEventListener("change", e => {
     populateMateriaisFromRoteiro(e.target.value, "agend-materiais-list", false);
@@ -3060,11 +3207,11 @@ function bindCalendarEvents() {
     const fim    = document.getElementById("agend-fim")?.value;
     const alertBox  = document.getElementById("conflict-alert-box");
     const alertText = document.getElementById("conflict-alert-text");
-    const confirmBtn = document.getElementById("agend-confirm-btn");
     if (!data || !inicio || !fim || !alertBox) return;
 
     const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
     const conflito = (appData.agendamentos || []).find(a =>
+      a.status !== "rascunho" &&
       a.data === data &&
       toMin(a.horaInicio) < toMin(fim) &&
       toMin(a.horaFim)    > toMin(inicio)
@@ -3073,15 +3220,43 @@ function bindCalendarEvents() {
     if (conflito) {
       alertBox.style.display = "flex";
       alertText.textContent  = `Laboratório já ocupado das ${conflito.horaInicio} às ${conflito.horaFim}. Escolha outro horário.`;
-      if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.opacity = ".45"; }
+      _conflictoBlocked = true;
     } else {
       alertBox.style.display = "none";
-      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.style.opacity = ""; }
+      _conflictoBlocked = false;
     }
+    syncConfirmBtn();
   };
 
   ["agend-data", "agend-inicio", "agend-fim"].forEach(id => {
     document.getElementById(id)?.addEventListener("change", checkConflito);
+  });
+
+  document.getElementById("btn-solicitar-auxiliar")?.addEventListener("click", () => {
+    const result  = checkMaterialEstoque();
+    const pedeSol = result?.pedeSol || [];
+    if (pedeSol.length === 0) return;
+
+    const nomeAgend = document.getElementById("agend-nome")?.value.trim() || "";
+    pedeSol.forEach(({ prod, qtd }) => {
+      const sol = criarSolicitacao({
+        produtoId:            prod.id,
+        produto:              prod.nome,
+        unidadeMedida:        prod.unidadeMedida || "",
+        quantidadeSolicitada: qtd,
+        quantidadeDisponivel: prod.quantidade,
+        estoqueMinimo:        prod.estoqueMinimo || 0,
+        origem:               "professor",
+        solicitante:          currentUser?.name || "Professor",
+        observacoes:          nomeAgend ? `Solicitação para agendamento "${nomeAgend}"` : "",
+      });
+      if (sol) _solicitacaoIds.push(sol.id);
+    });
+
+    _solicitacaoEnviada   = true;
+    _solicitacaoMateriais = pedeSol.map(({ prod, qtd }) => ({ id: prod.id, qtd }));
+    document.getElementById("btn-solicitar-auxiliar").style.display = "none";
+    showToast("Solicitação enviada para análise da equipe auxiliar.", "success");
   });
 
   // View/Edit modal
@@ -3113,7 +3288,8 @@ function bindCalendarEvents() {
     showConfirmModal({
       title:        "Cancelar Agendamento",
       message:      msg,
-      confirmLabel: "Confirmar Cancelamento",
+      confirmLabel: "Cancelar Agendamento",
+      cancelLabel:  "Voltar",
       confirmIcon:  "cancel",
       danger:       true,
       onConfirm: () => {
@@ -3189,21 +3365,13 @@ function bindCalendarEvents() {
     });
     if (!valid) return;
 
-    // Verificar conflito de horário no laboratório
-    const dataVal   = dataEl.value;
-    const inicioVal = inicioEl.value;
-    const fimVal    = fimEl.value;
-
     const toMin = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
-    const novoInicio = toMin(inicioVal);
-    const novoFim    = toMin(fimVal);
-
     const conflito = (appData.agendamentos || []).find(a =>
-      a.data === dataVal &&
-      toMin(a.horaInicio) < novoFim &&
-      toMin(a.horaFim)    > novoInicio
+      a.status !== "rascunho" &&
+      a.data === dataEl.value &&
+      toMin(a.horaInicio) < toMin(fimEl.value) &&
+      toMin(a.horaFim)    > toMin(inicioEl.value)
     );
-
     if (conflito) {
       showToast(
         `Laboratório já ocupado das ${conflito.horaInicio} às ${conflito.horaFim} (${conflito.titulo}). Escolha outro horário.`,
@@ -3213,45 +3381,20 @@ function bindCalendarEvents() {
       return;
     }
 
-    // Coletar materiais com controlaEstoque = true e verificar estoque
-    const matRows   = document.querySelectorAll("#agend-materiais-list .material-row");
-    const semEstoque = [];
-    matRows.forEach(row => {
-      const produtoId = row.dataset.produtoId || row.querySelector(".mat-select")?.value;
-      if (!produtoId) return;
-      const prod = (localProdutos || []).find(p => p.id === produtoId);
-      if (!prod || !prod.controlaEstoque) return;
-      if (prod.status === "estoque-baixo" || prod.status === "vencido") {
-        semEstoque.push(prod);
-      }
+    appData.agendamentos.push({
+      id:          String(Date.now()),
+      titulo:      nomeEl.value.trim(),
+      roteiro:     document.getElementById("agend-roteiro")?.value || "",
+      turma:       document.getElementById("agend-turma")?.value.trim() || "",
+      observacoes: document.getElementById("agend-obs")?.value.trim() || "",
+      data:        dataEl.value,
+      horaInicio:  inicioEl.value,
+      horaFim:     fimEl.value,
+      status:      "pendente",
+      professor:   currentUser?.name || "",
     });
-
-    const criarAgendamento = () => {
-      appData.agendamentos.push({
-        id:          String(Date.now()),
-        titulo:      nomeEl.value.trim(),
-        roteiro:     document.getElementById("agend-roteiro")?.value || "",
-        turma:       document.getElementById("agend-turma")?.value.trim() || "",
-        observacoes: document.getElementById("agend-obs")?.value.trim() || "",
-        data:        dataEl.value,
-        horaInicio:  inicioEl.value,
-        horaFim:     fimEl.value,
-        status:      "pendente",
-      });
-      document.getElementById("criar-agend-modal")?.classList.remove("open");
-      refreshCalendar();
-    };
-
-    if (semEstoque.length > 0) {
-      const nomes = semEstoque.map(p => `"${p.nome}"`).join(", ");
-      showToast(
-        `Agendamento bloqueado: ${nomes} ${semEstoque.length === 1 ? "está" : "estão"} com estoque insuficiente ou vencido. Solicite a reposição antes de agendar.`,
-        "warning"
-      );
-      return;
-    }
-
-    criarAgendamento(false);
+    document.getElementById("criar-agend-modal")?.classList.remove("open");
+    refreshCalendar();
   });
 
   [document.getElementById("agend-nome"), document.getElementById("agend-data"),
@@ -3261,6 +3404,11 @@ function bindCalendarEvents() {
 }
 
 function resetAgendamentoModal() {
+  _solicitacaoEnviada = false;
+  _solicitacaoIds       = [];
+  _solicitacaoMateriais = [];
+  _conflictoBlocked     = false;
+  _stockBlocked         = false;
   ["agend-nome", "agend-turma", "agend-obs"].forEach(id => {
     const el = document.getElementById(id);
     if (el) { el.value = ""; el.classList.remove("field-error"); }
@@ -3273,18 +3421,32 @@ function resetAgendamentoModal() {
   if (roteiroSel) { roteiroSel.value = ""; roteiroSel.classList.remove("field-error"); }
   const list = document.getElementById("agend-materiais-list");
   if (list) list.innerHTML = `<div class="materiais-empty-hint">Selecione um roteiro ou clique em Adicionar para incluir materiais.</div>`;
-  const alertBox = document.getElementById("material-alert-box");
-  if (alertBox) alertBox.style.display = "none";
-  const enviarBtn = document.getElementById("btn-enviar-analise");
-  if (enviarBtn) enviarBtn.style.display = "none";
+  const estoqueBox = document.getElementById("estoque-alert-box");
+  if (estoqueBox) estoqueBox.style.display = "none";
+  const solBtn = document.getElementById("btn-solicitar-auxiliar");
+  if (solBtn) solBtn.style.display = "none";
+  const confirmBtn = document.getElementById("agend-confirm-btn");
+  if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.style.opacity = ""; }
+}
+
+function solicitacaoAindaRepresentaFormulario() {
+  if (!_solicitacaoEnviada || _solicitacaoMateriais.length === 0) return _solicitacaoEnviada;
+  const rows = [...document.querySelectorAll("#agend-materiais-list .material-row")];
+  const current = rows
+    .filter(r => r.dataset.produtoId)
+    .map(r => ({ id: r.dataset.produtoId, qtd: parseQty(r.querySelector(".mat-qty")?.textContent || "").num }));
+  return _solicitacaoMateriais.every(s => {
+    const c = current.find(r => r.id === s.id);
+    return c && c.qtd === s.qtd;
+  });
 }
 
 function checkEnviarAnaliseBtnVisibility() {
-  const list = document.getElementById("agend-materiais-list");
-  const btn = document.getElementById("btn-enviar-analise");
-  if (!btn) return;
-  const hasUnavailable = !!list?.querySelector(".mat-status.em-falta");
-  btn.style.display = hasUnavailable ? "" : "none";
+  if (_solicitacaoEnviada && !solicitacaoAindaRepresentaFormulario()) {
+    _solicitacaoEnviada   = false;
+    _solicitacaoMateriais = [];
+  }
+  checkMaterialEstoque();
 }
 
 function getDisplayProdutos() {
@@ -3325,9 +3487,10 @@ function addMaterialRow(produtoId = "", qty = "", listId = "agend-materiais-list
     const [cls, icon, label] = statusMap[p.status] || ["", "help", ""];
     row.style.cursor = "pointer";
     row.dataset.produtoId = selId;
+    const unitLabel = p.unidadeMedida ? ` ${p.unidadeMedida}` : "";
     row.innerHTML = `
       <span class="mat-nome">${p.nome}</span>
-      <span class="mat-qty">${qtyVal || p.quantidade}</span>
+      <span class="mat-qty">${qtyVal || p.quantidade}${unitLabel}</span>
       ${showStatus ? `
         <span class="mat-status ${cls}">
           <span class="material-symbols-rounded">${icon}</span>
@@ -3352,6 +3515,7 @@ function addMaterialRow(produtoId = "", qty = "", listId = "agend-materiais-list
     const options = produtos.map(p =>
       `<option value="${p.id}" ${p.id === selId ? "selected" : ""}>${p.nome}</option>`
     ).join("");
+    const selProd = produtos.find(x => x.id === selId);
     row.style.cursor = "";
     row.innerHTML = `
       <select class="mat-select">
@@ -3359,15 +3523,18 @@ function addMaterialRow(produtoId = "", qty = "", listId = "agend-materiais-list
         ${options}
       </select>
       <input class="mat-input mat-qty-input" type="text" placeholder="Qtd." value="${qtyVal || ""}">
+      <span class="mat-unit-label">${selProd?.unidadeMedida || ""}</span>
       <button class="mat-remove-btn" title="Remover">
         <span class="material-symbols-rounded">close</span>
       </button>
     `;
     const select = row.querySelector(".mat-select");
     const qtyInput = row.querySelector(".mat-qty-input");
+    const unitSpan = row.querySelector(".mat-unit-label");
     select.addEventListener("change", e => {
       const p = produtos.find(x => x.id === e.target.value);
       if (p && !qtyInput.value) qtyInput.value = p.quantidade;
+      if (unitSpan) unitSpan.textContent = p?.unidadeMedida || "";
     });
     row.querySelector(".mat-remove-btn").addEventListener("click", removeRow);
     row.addEventListener("focusout", e => {
@@ -3560,7 +3727,7 @@ function buildReservasCalSection() {
 
   const dayCols = days.map(d => {
     const dateStr = toDateStr(d);
-    const dayEvts = agendamentos.filter(a => a.data === dateStr);
+    const dayEvts = agendamentos.filter(a => a.data === dateStr && a.status !== "rascunho");
     const layout  = layoutDayEvents(dayEvts);
     const N = layout.total;
 
@@ -3719,7 +3886,8 @@ function openReservaReadOnly(agend) {
       showConfirmModal({
         title:        "Cancelar Agendamento",
         message:      "Os materiais desta prática já foram preparados. Deseja realmente cancelar este agendamento?",
-        confirmLabel: "Confirmar Cancelamento",
+        confirmLabel: "Cancelar Agendamento",
+      cancelLabel:  "Voltar",
         confirmIcon:  "cancel",
         danger:       true,
         onConfirm: () => {
@@ -3799,7 +3967,8 @@ function openPreparacaoModal(agend) {
     showConfirmModal({
       title:        "Cancelar Agendamento",
       message:      "Tem certeza que deseja cancelar este agendamento?",
-      confirmLabel: "Confirmar Cancelamento",
+      confirmLabel: "Cancelar Agendamento",
+      cancelLabel:  "Voltar",
       confirmIcon:  "cancel",
       danger:       true,
       onConfirm: () => {

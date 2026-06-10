@@ -282,22 +282,30 @@ body {
 }
 
 .footer {
-  height: 82px;
-  background: white;
+  height: 100px;
+  background: #fff;
   border-top: 1px solid #e8edf5;
   display: flex;
   align-items: center;
 }
 
-.footer-links {
-  display: flex;
-  gap: 32px;
+.footer strong {
+  color: var(--purple);
+  font-size: 20px;
 }
 
-.footer-links a,
-.copyright {
-  color: #718096;
-  text-decoration: none;
+.footer strong span {
+  color: var(--green);
+}
+
+.footer p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.footer small {
+  color: var(--muted);
   font-size: 14px;
 }
 

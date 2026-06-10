@@ -157,6 +157,11 @@
       align-items: center;
       gap: 10px;
     }
+    .btn-outline-purple:hover {
+      border: 1px solid #cbb9ff;
+      color: var(--purple);
+      background: white;
+    }
 
     .btn-purple {
       border: 0;
@@ -166,6 +171,10 @@
       font-weight: 800;
       background: linear-gradient(135deg, #803cff, #6124df);
       box-shadow: 0 14px 28px rgba(124, 60, 255, .22);
+    }
+    .btn-purple:hover {
+      color: white;
+      background: linear-gradient(135deg, #803cff, #6124df);
     }
 
     .hero {
@@ -223,6 +232,7 @@
       align-items: center;
       gap: 10px;
     }
+    .btn-green:hover { background: linear-gradient(135deg, #06cc69, #00bf56); color: white; }
 
     .btn-demo {
       background: white;

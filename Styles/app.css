@@ -64,8 +64,9 @@
 .btn-pongo.btn-danger {
   background-color: var(--red);
   border-color: var(--red);
+  color: #fff;
 }
-.btn-pongo.btn-danger:hover { background-color: #e8002e; border-color: #e8002e; }
+.btn-pongo.btn-danger:hover { background-color: #e8002e; border-color: #e8002e; color: #fff; }
 
 .btn-pongo.btn-outline-secondary {
   background: #f5f7fa;
@@ -2590,6 +2591,26 @@ tbody tr:last-child td {
   flex-shrink: 0;
 }
 
+.estoque-alert-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #fff0f0;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b91c1c;
+  margin-top: 8px;
+}
+
+.estoque-alert-box .material-symbols-rounded {
+  font-size: 18px;
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
 .materiais-empty-hint {
   padding: 16px;
   text-align: center;
@@ -2632,6 +2653,12 @@ tbody tr:last-child td {
   width: 90px;
 }
 
+.mat-unit-label {
+  color: var(--muted);
+  font-size: 13px;
+  min-width: 32px;
+}
+
 .mat-remove-btn {
   display: flex;
   align-items: center;
@@ -2665,18 +2692,18 @@ tbody tr:last-child td {
   height: 42px;
   padding: 0 20px;
   background: transparent;
-  border: 2px solid var(--green);
+  border: 2px solid var(--blue);
   border-radius: 11px;
   font-size: 13px;
   font-weight: 700;
-  color: var(--green);
+  color: var(--blue);
   cursor: pointer;
   font-family: Inter, sans-serif;
   transition: background .15s;
 }
 
 .btn-enviar-analise:hover {
-  background: #f0fff6;
+  background: #eff6ff;
 }
 
 .btn-modal-green {
