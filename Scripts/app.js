@@ -1466,7 +1466,7 @@ function renderEmprestimos() {
 
     modal.querySelector(".modal-title").textContent = empItem
       ? "Editar Empréstimo"
-      : "Nova Solicitação de Empréstimo";
+      : "Criar Empréstimo";
 
     const produtoEl = document.getElementById("emp-produto");
     const qtyEl     = document.getElementById("emp-qty");
@@ -1513,7 +1513,7 @@ function renderEmprestimos() {
 
   _empOpenModal = openEmpModal;
 
-  document.getElementById("new-emprestimo-btn")?.addEventListener("click", openEmpModal);
+  document.getElementById("new-emprestimo-btn")?.addEventListener("click", () => openEmpModal());
   document.getElementById("emp-modal-close")?.addEventListener("click", closeEmpModal);
   document.getElementById("emp-modal-cancel")?.addEventListener("click", closeEmpModal);
   document.getElementById("criar-emp-modal")?.addEventListener("click", e => {
@@ -2628,10 +2628,18 @@ function bindRoteirosTableButtons() {
 
   document.querySelectorAll("[data-delete-roteiro-id]").forEach(btn => {
     btn.addEventListener("click", () => {
-      if (!confirm("Tem certeza que deseja excluir este roteiro? Esta ação não poderá ser desfeita.")) return;
-      localRoteiros = (localRoteiros || []).filter(r => r.id !== btn.dataset.deleteRoteiroId);
-      refreshRoteirosTable();
-      showToast("Roteiro excluído com sucesso.");
+      showConfirmModal({
+        title:        "Excluir Roteiro",
+        message:      "Tem certeza que deseja excluir este roteiro? Esta ação não poderá ser desfeita.",
+        confirmLabel: "Excluir",
+        confirmIcon:  "delete",
+        danger:       true,
+        onConfirm: () => {
+          localRoteiros = (localRoteiros || []).filter(r => r.id !== btn.dataset.deleteRoteiroId);
+          refreshRoteirosTable();
+          showToast("Roteiro excluído com sucesso.");
+        },
+      });
     });
   });
 
