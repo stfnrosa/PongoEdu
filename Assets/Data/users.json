@@ -1,18 +1,26 @@
 [
   {
-    "id": 1,
+    "id": "1",
     "name": "Ana Lima",
     "email": "professor@pongoedu.com.br",
     "password": "123",
     "profile": "professor",
-    "avatar": "👩‍🏫"
+    "avatar": "👩‍🏫",
+    "ativo": true,
+    "bloqueado": false,
+    "deveRedefinirSenha": false,
+    "ultimoLogin": "2026-08-13T12:33:00"
   },
   {
-    "id": 2,
+    "id": "2",
     "name": "Auxiliar",
     "email": "auxiliar@pongoedu.com.br",
     "password": "123",
     "profile": "auxiliar",
-    "avatar": "👩‍🔬"
+    "avatar": "👩‍🔬",
+    "ativo": true,
+    "bloqueado": false,
+    "deveRedefinirSenha": false,
+    "ultimoLogin": "2026-08-14T09:08:00"
   }
 ]

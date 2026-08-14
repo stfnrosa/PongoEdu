@@ -116,11 +116,64 @@
         </button>
       </form>
 
-      <div class="divider">
+      <form id="resetPasswordForm" class="d-none">
+        <div class="alert alert-warning" role="alert">
+          Sua senha é temporária. Por segurança, crie uma nova senha para continuar.
+        </div>
+
+        <div id="resetPasswordError" class="alert alert-danger d-none" role="alert"></div>
+
+        <div class="mb-4">
+          <label class="form-label">Nova senha</label>
+
+          <div class="input-wrapper">
+            <span class="material-symbols-rounded input-icon">lock</span>
+
+            <input
+              type="password"
+              class="custom-input"
+              placeholder="Nova senha"
+              id="newPassword"
+              required
+            >
+
+            <button type="button" class="toggle-password" id="toggleNewPassword">
+              <span class="material-symbols-rounded">visibility</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Confirmar nova senha</label>
+
+          <div class="input-wrapper">
+            <span class="material-symbols-rounded input-icon">lock</span>
+
+            <input
+              type="password"
+              class="custom-input"
+              placeholder="Confirme a nova senha"
+              id="confirmNewPassword"
+              required
+            >
+
+            <button type="button" class="toggle-password" id="toggleConfirmNewPassword">
+              <span class="material-symbols-rounded">visibility</span>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="login-btn">
+          Salvar nova senha
+          <span class="material-symbols-rounded">check</span>
+        </button>
+      </form>
+
+      <div class="divider" id="loginDivider">
         <span>ou</span>
       </div>
 
-      <p class="signup-text">
+      <p class="signup-text" id="signupText">
         Não tem uma conta?
         <a href="criar-conta.html">Criar conta</a>
       </p>
@@ -142,6 +195,7 @@
 
   <script>
     const USERS_PATH = "../Assets/Data/users.json";
+    const USERS_OVERRIDE_KEY = "pongo_users_override";
 
     const form = document.getElementById("loginForm");
     const emailInput = document.getElementById("email");
@@ -149,10 +203,69 @@
     const loginError = document.getElementById("loginError");
     const togglePassword = document.getElementById("togglePassword");
 
+    const resetForm = document.getElementById("resetPasswordForm");
+    const resetError = document.getElementById("resetPasswordError");
+    const newPasswordInput = document.getElementById("newPassword");
+    const confirmNewPasswordInput = document.getElementById("confirmNewPassword");
+    const loginDivider = document.getElementById("loginDivider");
+    const signupText = document.getElementById("signupText");
+    const titleEl = document.querySelector(".title");
+    const subtitleEl = document.querySelector(".subtitle");
+
+    let pendingUser = null;
+    let pendingUsersList = null;
+
     togglePassword.addEventListener("click", () => {
       passwordInput.type =
         passwordInput.type === "password" ? "text" : "password";
     });
+
+    document.getElementById("toggleNewPassword").addEventListener("click", () => {
+      newPasswordInput.type = newPasswordInput.type === "password" ? "text" : "password";
+    });
+
+    document.getElementById("toggleConfirmNewPassword").addEventListener("click", () => {
+      confirmNewPasswordInput.type = confirmNewPasswordInput.type === "password" ? "text" : "password";
+    });
+
+    async function getUsers() {
+      const stored = localStorage.getItem(USERS_OVERRIDE_KEY);
+
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (e) {
+          // dado corrompido, recarrega do arquivo original
+        }
+      }
+
+      const response = await fetch(USERS_PATH);
+
+      if (!response.ok) {
+        throw new Error("Erro ao carregar usuários.");
+      }
+
+      return response.json();
+    }
+
+    function saveUsers(users) {
+      localStorage.setItem(USERS_OVERRIDE_KEY, JSON.stringify(users));
+    }
+
+    function completeLogin(user) {
+      localStorage.setItem("pongo_user", JSON.stringify(user));
+      localStorage.setItem("pongo_user_profile", user.profile);
+      window.location.href = "app.html";
+    }
+
+    function showResetPasswordForm() {
+      titleEl.textContent = "Defina sua nova senha";
+      subtitleEl.textContent = "Sua senha é temporária. Crie uma nova senha para continuar.";
+      form.classList.add("d-none");
+      loginDivider.classList.add("d-none");
+      signupText.classList.add("d-none");
+      resetForm.classList.remove("d-none");
+    }
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -163,13 +276,7 @@
       const password = passwordInput.value.trim();
 
       try {
-        const response = await fetch(USERS_PATH);
-
-        if (!response.ok) {
-          throw new Error("Erro ao carregar usuários.");
-        }
-
-        const users = await response.json();
+        const users = await getUsers();
 
         const user = users.find((item) => {
           return item.email.toLowerCase() === email &&
@@ -182,16 +289,56 @@
           return;
         }
 
-        localStorage.setItem("pongo_user", JSON.stringify(user));
-        localStorage.setItem("pongo_user_profile", user.profile);
+        if (user.deveRedefinirSenha) {
+          pendingUser = user;
+          pendingUsersList = users;
+          showResetPasswordForm();
+          return;
+        }
 
-        window.location.href = "app.html";
+        completeLogin(user);
 
       } catch (error) {
         loginError.textContent = "Não foi possível validar o login. Verifique o arquivo users.json.";
         loginError.classList.remove("d-none");
         console.error(error);
       }
+    });
+
+    resetForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      resetError.classList.add("d-none");
+
+      const newPassword = newPasswordInput.value.trim();
+      const confirmNewPassword = confirmNewPasswordInput.value.trim();
+
+      if (newPassword.length < 4) {
+        resetError.textContent = "A nova senha deve ter pelo menos 4 caracteres.";
+        resetError.classList.remove("d-none");
+        return;
+      }
+
+      if (newPassword !== confirmNewPassword) {
+        resetError.textContent = "As senhas não coincidem.";
+        resetError.classList.remove("d-none");
+        return;
+      }
+
+      if (newPassword === pendingUser.password) {
+        resetError.textContent = "A nova senha deve ser diferente da senha temporária.";
+        resetError.classList.remove("d-none");
+        return;
+      }
+
+      pendingUser.password = newPassword;
+      pendingUser.deveRedefinirSenha = false;
+
+      const idx = pendingUsersList.findIndex((u) => u.id === pendingUser.id);
+      if (idx !== -1) pendingUsersList[idx] = pendingUser;
+
+      saveUsers(pendingUsersList);
+      completeLogin(pendingUser);
     });
   </script>
 </body>

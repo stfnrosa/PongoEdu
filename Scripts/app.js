@@ -1,5 +1,6 @@
 const BASE_DATA = "../Assets/Data";
 const LOGIN_PATH = "entrar.html";
+const USERS_OVERRIDE_KEY = "pongo_users_override";
 
 /* ===== Componentes reutilizáveis (Bootstrap) ===== */
 
@@ -103,6 +104,11 @@ let solicitacoesFilter = { search: "", origem: "all", status: "pendente" };
 let localMovimentacoes = null;
 let _empOpenModal = null;
 let movFilter = { search: "", tipo: "all" };
+
+let localUsuarios = null;
+let usuariosFilter = { search: "" };
+let currentEditUsuarioId = null;
+let currentResetUsuarioId = null;
 
 /* ---- Modal de confirmação reutilizável ---- */
 function showConfirmModal({ title, message, confirmLabel, confirmIcon = "check", danger = false, onConfirm, cancelLabel, onCancel }) {
@@ -416,7 +422,7 @@ async function initApp() {
     localStorage.setItem("pongo_user", JSON.stringify(currentUser));
   }
 
-  const [profileData, agendamentos, categorias, produtos, roteiros, emprestimos, entradas, solicitacoes, movimentacoes] = await Promise.all([
+  const [profileData, agendamentos, categorias, produtos, roteiros, emprestimos, entradas, solicitacoes, movimentacoes, usuarios] = await Promise.all([
     loadJSON(`${BASE_DATA}/profiles/${currentUser.profile}.json`),
     loadJSON(`${BASE_DATA}/agendamentos.json`),
     loadJSON(`${BASE_DATA}/categorias.json`),
@@ -426,6 +432,7 @@ async function initApp() {
     loadJSON(`${BASE_DATA}/entradas.json`),
     loadJSON(`${BASE_DATA}/solicitacoes.json`),
     loadJSON(`${BASE_DATA}/movimentacoes.json`),
+    loadUsuarios(),
   ]);
 
   localProdutos      = produtos;
@@ -433,6 +440,7 @@ async function initApp() {
   localEntradas      = JSON.parse(JSON.stringify(entradas      || []));
   localSolicitacoes  = JSON.parse(JSON.stringify(solicitacoes  || []));
   localMovimentacoes = JSON.parse(JSON.stringify(movimentacoes || []));
+  localUsuarios      = JSON.parse(JSON.stringify(usuarios      || []));
   appData = {
     profiles:   { [currentUser.profile]: { role: profileData.role } },
     menus:      { [currentUser.profile]: profileData.menu },
@@ -465,6 +473,18 @@ async function loadJSON(path) {
   const response = await fetch(path);
   if (!response.ok) throw new Error(`Não foi possível carregar ${path}`);
   return response.json();
+}
+
+async function loadUsuarios() {
+  const stored = localStorage.getItem(USERS_OVERRIDE_KEY);
+  if (stored) {
+    try { return JSON.parse(stored); } catch (e) { /* dado corrompido, recarrega do arquivo */ }
+  }
+  return loadJSON(`${BASE_DATA}/users.json`);
+}
+
+function syncUsuariosToStorage() {
+  localStorage.setItem(USERS_OVERRIDE_KEY, JSON.stringify(localUsuarios));
 }
 
 function renderUserInfo() {
@@ -640,6 +660,11 @@ function loadPage(page) {
 
   if (page === "entradas") {
     renderEntradas();
+    return;
+  }
+
+  if (page === "usuarios") {
+    renderUsuarios();
     return;
   }
 
@@ -4540,6 +4565,440 @@ function bindCategoriasEvents(isAuxiliar) {
 
     closeCatModal();
     refreshCategoriasTable(isAuxiliar);
+  });
+}
+
+/* ===================== USUÁRIOS E ACESSOS (Administração) ===================== */
+
+const PROFILE_LABELS = { professor: "Professor", auxiliar: "Auxiliar" };
+
+function formatDateTimeBR(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d)) return "—";
+  const dd  = String(d.getDate()).padStart(2, "0");
+  const mm  = String(d.getMonth() + 1).padStart(2, "0");
+  const hh  = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}, ${hh}:${min}`;
+}
+
+function getFilteredUsuarios() {
+  const q = (usuariosFilter.search || "").toLowerCase().trim();
+  if (!q) return localUsuarios;
+  return localUsuarios.filter(u =>
+    u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+  );
+}
+
+function renderUsuarios() {
+  const isAuxiliar = currentUser.profile === "auxiliar";
+
+  document.getElementById("main-content").innerHTML = `
+    <div class="agend-page">
+      <h1 class="page-section-title">Usuários e Acessos</h1>
+      <p class="page-section-sub">Gerencie os usuários que têm acesso ao sistema e seus perfis de permissão.</p>
+      <div class="page-toolbar">
+        <label class="page-search">
+          <span class="material-symbols-rounded">search</span>
+          <input type="text" id="usuarios-search" placeholder="Pesquisar...">
+        </label>
+        <button class="export-btn-outline" id="usuarios-export-btn">
+          <span class="material-symbols-rounded">download</span>
+          Exportar
+        </button>
+      </div>
+
+      <div id="usuarios-table-container">
+        ${buildUsuariosTable(getFilteredUsuarios(), isAuxiliar)}
+      </div>
+
+      ${isAuxiliar ? buildCriarUsuarioModal() : ""}
+      ${isAuxiliar ? buildResetSenhaModal() : ""}
+    </div>
+  `;
+
+  bindUsuariosEvents(isAuxiliar);
+}
+
+function buildUsuariosTable(usuarios, isAuxiliar) {
+  const rows = usuarios.length === 0
+    ? `<tr class="table-empty-row"><td colspan="${isAuxiliar ? 6 : 5}">Nenhum usuário encontrado.</td></tr>`
+    : usuarios.map(u => `
+        <tr>
+          <td>
+            <div>${u.name}</div>
+            <small style="display:block;color:var(--muted);font-weight:600">${PROFILE_LABELS[u.profile] || u.profile}</small>
+          </td>
+          <td>
+            ${u.email}
+            ${u.deveRedefinirSenha ? `<br><small style="color:#b45309;font-weight:700">Aguardando redefinição de senha</small>` : ""}
+          </td>
+          <td>${formatDateTimeBR(u.ultimoLogin)}</td>
+          <td><span class="status-pill ${u.ativo ? "normal" : "muted"}">${u.ativo ? "Sim" : "Não"}</span></td>
+          <td><span class="status-pill ${u.bloqueado ? "vencido" : "muted"}">${u.bloqueado ? "Sim" : "Não"}</span></td>
+          ${isAuxiliar ? `
+            <td>
+              <div class="action-cell">
+                <button class="action-icon-btn" title="Editar" data-edit-usuario-id="${u.id}">
+                  <span class="material-symbols-rounded">edit</span>
+                </button>
+                <button class="action-icon-btn" title="${u.deveRedefinirSenha ? "Redefinição já pendente" : "Redefinir senha"}" data-reset-senha-id="${u.id}">
+                  <span class="material-symbols-rounded">${u.deveRedefinirSenha ? "hourglass_top" : "key"}</span>
+                </button>
+                <button class="action-icon-btn" title="${u.bloqueado ? "Desbloquear" : "Bloquear"}" data-toggle-bloqueio-id="${u.id}">
+                  <span class="material-symbols-rounded">${u.bloqueado ? "lock_open" : "lock"}</span>
+                </button>
+                <button class="action-icon-btn delete" title="Excluir" data-delete-usuario-id="${u.id}">
+                  <span class="material-symbols-rounded">delete</span>
+                </button>
+              </div>
+            </td>
+          ` : ""}
+        </tr>
+      `).join("");
+
+  return `
+    <div class="list-card">
+      <div class="list-card-header">
+        <span class="list-card-title">Usuários</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          ${resultBadge(usuarios.length, "usuário(s)")}
+          ${isAuxiliar ? btnCreate({ id: "new-usuario-btn", label: "Novo usuário" }) : ""}
+        </div>
+      </div>
+      <div class="list-card-inner">
+        <div class="table-wrap">
+          <table class="produtos-table">
+            <thead>
+              <tr>
+                <th>Nome completo</th>
+                <th>Login / E-mail</th>
+                <th>Último login</th>
+                <th>Ativo</th>
+                <th>Bloqueado</th>
+                ${isAuxiliar ? "<th>Ações</th>" : ""}
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildCriarUsuarioModal() {
+  return `
+    <div class="modal-overlay" id="criar-usuario-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <span class="modal-title" id="usuario-modal-title">Novo Usuário</span>
+          <button class="modal-close" id="usuario-modal-close-btn">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="modal-field">
+            <label>Nome Completo <span class="required-star">*</span></label>
+            <input type="text" id="usr-nome" placeholder="Ex.: Maria Souza">
+          </div>
+
+          <div class="modal-field">
+            <label>E-mail <span class="required-star">*</span></label>
+            <input type="email" id="usr-email" placeholder="Ex.: maria.souza@pongoedu.com.br">
+          </div>
+
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Perfil <span class="required-star">*</span></label>
+              <select id="usr-perfil">
+                <option value="professor">Professor</option>
+                <option value="auxiliar">Auxiliar</option>
+              </select>
+            </div>
+            <div class="modal-field">
+              <label>Senha <span class="required-star">*</span></label>
+              <input type="password" id="usr-senha" placeholder="Senha de acesso">
+            </div>
+          </div>
+
+          <div class="modal-field">
+            <label>Ativo</label>
+            <label class="toggle">
+              <input type="checkbox" id="usr-ativo" checked>
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span class="toggle-label">Usuário pode acessar o sistema</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-modal-cancel" id="usuario-modal-cancel-btn">Cancelar</button>
+          <button class="btn-modal-save" id="usuario-modal-save-btn">
+            <span class="material-symbols-rounded">check</span>
+            Salvar Usuário
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function gerarSenhaTemporaria() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let s = "";
+  for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+function buildResetSenhaModal() {
+  return `
+    <div class="modal-overlay" id="reset-senha-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <span class="modal-title">Redefinir Senha</span>
+          <button class="modal-close" id="reset-senha-close-btn">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <p style="font-size:14px;color:var(--dark);line-height:1.65;margin:0 0 16px">
+            Defina uma senha temporária para <strong id="reset-senha-usuario-nome">-</strong>.
+            No próximo acesso, o sistema exigirá que o usuário crie uma nova senha antes de continuar.
+          </p>
+
+          <div class="modal-field">
+            <label>Senha temporária <span class="required-star">*</span></label>
+            <div style="display:flex;gap:8px">
+              <input type="text" id="reset-senha-valor" placeholder="Ex.: Temp@2026" style="flex:1">
+              <button class="btn-modal-cancel" id="reset-senha-gerar-btn" type="button" style="white-space:nowrap">
+                Gerar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-modal-cancel" id="reset-senha-cancel-btn">Cancelar</button>
+          <button class="btn-modal-save" id="reset-senha-save-btn">
+            <span class="material-symbols-rounded">key</span>
+            Definir Senha Temporária
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function refreshUsuariosTable(isAuxiliar) {
+  const container = document.getElementById("usuarios-table-container");
+  if (container) {
+    container.innerHTML = buildUsuariosTable(getFilteredUsuarios(), isAuxiliar);
+    bindUsuarioTableButtons(isAuxiliar);
+  }
+}
+
+function bindUsuarioTableButtons(isAuxiliar) {
+  document.getElementById("new-usuario-btn")?.addEventListener("click", () => {
+    document.getElementById("criar-usuario-modal").classList.add("open");
+  });
+
+  document.querySelectorAll("[data-edit-usuario-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const u = localUsuarios.find(x => x.id === btn.dataset.editUsuarioId);
+      if (!u) return;
+
+      currentEditUsuarioId = u.id;
+      document.getElementById("usr-nome").value    = u.name;
+      document.getElementById("usr-email").value   = u.email;
+      document.getElementById("usr-perfil").value  = u.profile;
+      document.getElementById("usr-senha").value   = u.password || "";
+      document.getElementById("usr-ativo").checked = u.ativo !== false;
+      document.getElementById("usuario-modal-title").textContent = "Editar Usuário";
+      document.getElementById("usuario-modal-save-btn").innerHTML =
+        `<span class="material-symbols-rounded">check</span> Salvar Alterações`;
+
+      document.getElementById("criar-usuario-modal").classList.add("open");
+    });
+  });
+
+  document.querySelectorAll("[data-toggle-bloqueio-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const u = localUsuarios.find(x => x.id === btn.dataset.toggleBloqueioId);
+      if (!u) return;
+
+      const vaiBloquear = !u.bloqueado;
+      showConfirmModal({
+        title:        vaiBloquear ? "Bloquear usuário" : "Desbloquear usuário",
+        message:      `Tem certeza que deseja ${vaiBloquear ? "bloquear" : "desbloquear"} o acesso de "${u.name}" ao sistema?`,
+        confirmLabel: vaiBloquear ? "Bloquear" : "Desbloquear",
+        confirmIcon:  vaiBloquear ? "lock" : "lock_open",
+        danger:       vaiBloquear,
+        onConfirm: () => {
+          u.bloqueado = vaiBloquear;
+          syncUsuariosToStorage();
+          refreshUsuariosTable(isAuxiliar);
+          showToast(`Usuário ${vaiBloquear ? "bloqueado" : "desbloqueado"} com sucesso.`, vaiBloquear ? "warning" : "success");
+        }
+      });
+    });
+  });
+
+  document.querySelectorAll("[data-reset-senha-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const u = localUsuarios.find(x => x.id === btn.dataset.resetSenhaId);
+      if (!u) return;
+
+      currentResetUsuarioId = u.id;
+      document.getElementById("reset-senha-usuario-nome").textContent = u.name;
+      document.getElementById("reset-senha-valor").value = gerarSenhaTemporaria();
+      document.getElementById("reset-senha-modal").classList.add("open");
+    });
+  });
+
+  document.querySelectorAll("[data-delete-usuario-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const u = localUsuarios.find(x => x.id === btn.dataset.deleteUsuarioId);
+      if (!u) return;
+
+      showConfirmModal({
+        title:        "Excluir usuário",
+        message:      `Tem certeza que deseja excluir "${u.name}"? Esta ação não pode ser desfeita.`,
+        confirmLabel: "Excluir",
+        confirmIcon:  "delete",
+        danger:       true,
+        onConfirm: () => {
+          localUsuarios = localUsuarios.filter(x => x.id !== u.id);
+          syncUsuariosToStorage();
+          refreshUsuariosTable(isAuxiliar);
+          showToast("Usuário excluído com sucesso.");
+        }
+      });
+    });
+  });
+}
+
+function bindUsuariosEvents(isAuxiliar) {
+  document.getElementById("usuarios-search")?.addEventListener("input", e => {
+    usuariosFilter.search = e.target.value;
+    refreshUsuariosTable(isAuxiliar);
+  });
+
+  document.getElementById("usuarios-export-btn")?.addEventListener("click", () => {
+    exportCSV("usuarios.csv",
+      ["Nome completo", "E-mail", "Perfil", "Último login", "Ativo", "Bloqueado"],
+      localUsuarios.map(u => [
+        u.name, u.email, PROFILE_LABELS[u.profile] || u.profile,
+        formatDateTimeBR(u.ultimoLogin), u.ativo ? "Sim" : "Não", u.bloqueado ? "Sim" : "Não"
+      ])
+    );
+  });
+
+  bindUsuarioTableButtons(isAuxiliar);
+
+  if (!isAuxiliar) return;
+
+  const resetUsuarioModal = () => {
+    currentEditUsuarioId = null;
+    document.getElementById("usr-nome").value    = "";
+    document.getElementById("usr-email").value   = "";
+    document.getElementById("usr-perfil").value  = "professor";
+    document.getElementById("usr-senha").value   = "";
+    document.getElementById("usr-ativo").checked = true;
+    document.getElementById("usuario-modal-title").textContent = "Novo Usuário";
+    document.getElementById("usuario-modal-save-btn").innerHTML =
+      `<span class="material-symbols-rounded">check</span> Salvar Usuário`;
+  };
+
+  const closeUsuarioModal = () => {
+    document.getElementById("criar-usuario-modal")?.classList.remove("open");
+    resetUsuarioModal();
+  };
+
+  document.getElementById("usuario-modal-close-btn")?.addEventListener("click", closeUsuarioModal);
+  document.getElementById("usuario-modal-cancel-btn")?.addEventListener("click", closeUsuarioModal);
+  document.getElementById("criar-usuario-modal")?.addEventListener("click", e => {
+    if (e.target === e.currentTarget) closeUsuarioModal();
+  });
+
+  const closeResetSenhaModal = () => {
+    document.getElementById("reset-senha-modal")?.classList.remove("open");
+    currentResetUsuarioId = null;
+  };
+
+  document.getElementById("reset-senha-close-btn")?.addEventListener("click", closeResetSenhaModal);
+  document.getElementById("reset-senha-cancel-btn")?.addEventListener("click", closeResetSenhaModal);
+  document.getElementById("reset-senha-modal")?.addEventListener("click", e => {
+    if (e.target === e.currentTarget) closeResetSenhaModal();
+  });
+
+  document.getElementById("reset-senha-gerar-btn")?.addEventListener("click", () => {
+    document.getElementById("reset-senha-valor").value = gerarSenhaTemporaria();
+  });
+
+  document.getElementById("reset-senha-save-btn")?.addEventListener("click", () => {
+    const novaSenha = document.getElementById("reset-senha-valor").value.trim();
+    if (!novaSenha) {
+      showToast("Informe ou gere uma senha temporária.", "error");
+      return;
+    }
+
+    const u = localUsuarios.find(x => x.id === currentResetUsuarioId);
+    if (!u) return;
+
+    u.password = novaSenha;
+    u.deveRedefinirSenha = true;
+    syncUsuariosToStorage();
+
+    closeResetSenhaModal();
+    refreshUsuariosTable(isAuxiliar);
+    showToast(`Senha temporária definida para "${u.name}": ${novaSenha}. O usuário deverá redefini-la no próximo acesso.`);
+  });
+
+  document.getElementById("usuario-modal-save-btn")?.addEventListener("click", () => {
+    const name     = document.getElementById("usr-nome").value.trim();
+    const email    = document.getElementById("usr-email").value.trim();
+    const profile  = document.getElementById("usr-perfil").value;
+    const password = document.getElementById("usr-senha").value;
+    const ativo    = document.getElementById("usr-ativo").checked;
+
+    if (!name || !email || !password) {
+      showToast("Preencha nome, e-mail e senha para continuar.", "error");
+      return;
+    }
+
+    const emailJaExiste = localUsuarios.some(u =>
+      u.email.toLowerCase() === email.toLowerCase() && u.id !== currentEditUsuarioId
+    );
+    if (emailJaExiste) {
+      showToast("Já existe um usuário cadastrado com este e-mail.", "error");
+      return;
+    }
+
+    if (currentEditUsuarioId) {
+      const idx = localUsuarios.findIndex(u => u.id === currentEditUsuarioId);
+      if (idx !== -1) {
+        localUsuarios[idx] = { ...localUsuarios[idx], name, email, profile, password, ativo };
+      }
+      showToast("Usuário atualizado com sucesso.");
+    } else {
+      localUsuarios.push({
+        id:               String(Date.now()),
+        name, email, profile, password, ativo,
+        avatar:           profile === "professor" ? "👨‍🏫" : "👩‍🔬",
+        bloqueado:        false,
+        deveRedefinirSenha: false,
+        ultimoLogin:      null
+      });
+      showToast("Usuário criado com sucesso.");
+    }
+
+    syncUsuariosToStorage();
+    closeUsuarioModal();
+    refreshUsuariosTable(isAuxiliar);
   });
 }
 

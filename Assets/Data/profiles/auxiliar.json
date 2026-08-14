@@ -86,6 +86,21 @@
           "page": "reservas"
         }
       ]
+    },
+    {
+      "id": "administracao",
+      "label": "Administração",
+      "icon": "admin_panel_settings",
+      "type": "group",
+      "defaultOpen": false,
+      "children": [
+        {
+          "id": "usuarios",
+          "label": "Usuários",
+          "icon": "group",
+          "page": "usuarios"
+        }
+      ]
     }
   ],
 
